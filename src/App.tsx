@@ -12,6 +12,7 @@ import Distributors from './pages/Distributors';
 import Shipments from './pages/Shipments';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
+import Users from './pages/Users';
 import Layout from './components/Layout';
 
 export default function App() {
@@ -60,6 +61,7 @@ export default function App() {
           <Route path="distributors" element={<Distributors user={user} />} />
           <Route path="shipments" element={<Shipments user={user} />} />
           <Route path="reports" element={<Reports user={user} />} />
+          <Route path="users" element={<Users user={user} />} />
           <Route path="settings" element={<Settings user={user} />} />
         </Route>
       </Routes>

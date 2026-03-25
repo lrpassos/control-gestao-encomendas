@@ -8,8 +8,10 @@ export interface Company {
 export interface UserProfile {
   uid: string;
   email: string;
+  username?: string;
   role: UserRole;
   companyId: string;
+  mustChangePassword?: boolean;
 }
 
 export interface Customer {

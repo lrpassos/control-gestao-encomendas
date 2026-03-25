@@ -12,7 +12,8 @@ import {
   Menu, 
   X,
   Settings,
-  Building2
+  Building2,
+  ShieldCheck
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { collection, getDocs } from 'firebase/firestore';
@@ -69,9 +70,12 @@ export default function Layout({ user, setUser }: LayoutProps) {
     { name: 'Remessas', path: '/shipments', icon: Package },
     { name: 'Clientes', path: '/customers', icon: Users },
     { name: 'Distribuidores', path: '/distributors', icon: Truck },
+    { name: 'Usuários', path: '/users', icon: ShieldCheck, adminOnly: true },
     { name: 'Relatórios', path: '/reports', icon: BarChart3 },
     { name: 'Configurações', path: '/settings', icon: Settings },
   ];
+
+  const filteredNavItems = navItems.filter(item => !item.adminOnly || user.role === 'admin');
 
   const handleCompanyChange = (companyId: string) => {
     setUser({ ...user, companyId });
@@ -95,7 +99,7 @@ export default function Layout({ user, setUser }: LayoutProps) {
           </div>
 
           <nav className="flex-1 space-y-1 px-4">
-            {navItems.map((item) => {
+            {filteredNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;
               return (
