@@ -1,11 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, updateDoc, doc, getDoc } from 'firebase/firestore';
+import React, { useState, useEffect, useMemo } from 'react';
+import { collection, query, where, getDocs, updateDoc, doc, getDoc, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { UserProfile, Shipment, Customer, Distributor } from '../types';
-import { Search, Package, CheckCircle2, AlertCircle, Calendar, User, Hash } from 'lucide-react';
-import { format } from 'date-fns';
+import { Search, Package, CheckCircle2, AlertCircle, Calendar, User, Hash, TrendingUp, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { format, subDays, isWithinInterval, startOfDay, endOfDay, eachDayOfInterval } from 'date-fns';
 import { toast } from 'sonner';
 import { cn } from '../lib/utils';
+import { 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  Legend
+} from 'recharts';
 
 interface DashboardProps {
   user: UserProfile;
@@ -14,6 +24,7 @@ interface DashboardProps {
 export default function Dashboard({ user }: DashboardProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [allShipments, setAllShipments] = useState<Shipment[]>([]);
   const [customers, setCustomers] = useState<Record<string, Customer>>({});
   const [distributors, setDistributors] = useState<Record<string, Distributor>>({});
   const [loading, setLoading] = useState(true);
@@ -24,17 +35,26 @@ export default function Dashboard({ user }: DashboardProps) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const shipmentsQuery = query(
+      // Fetch all shipments for the company to calculate flow
+      const allShipmentsQuery = query(
         collection(db, 'shipments'),
         where('companyId', '==', user.companyId),
-        where('status', '==', 'in-stock')
+        where('createdBy', '==', user.uid),
+        orderBy('createdAt', 'desc')
       );
-      const shipmentsSnapshot = await getDocs(shipmentsQuery);
-      const shipmentsList = shipmentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Shipment));
-      setShipments(shipmentsList);
+      const allShipmentsSnapshot = await getDocs(allShipmentsQuery);
+      const allShipmentsList = allShipmentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Shipment));
+      setAllShipments(allShipmentsList);
+      
+      // Filter for in-stock for the table
+      setShipments(allShipmentsList.filter(s => s.status === 'in-stock'));
 
       // Fetch customers and distributors for mapping
-      const customersSnapshot = await getDocs(query(collection(db, 'customers'), where('companyId', '==', user.companyId)));
+      const customersSnapshot = await getDocs(query(
+        collection(db, 'customers'), 
+        where('companyId', '==', user.companyId),
+        where('createdBy', '==', user.uid)
+      ));
       const distributorsSnapshot = await getDocs(query(collection(db, 'distributors'), where('companyId', '==', user.companyId)));
 
       const customersMap: Record<string, Customer> = {};
@@ -54,6 +74,43 @@ export default function Dashboard({ user }: DashboardProps) {
   useEffect(() => {
     fetchData();
   }, [user.companyId]);
+
+  // Chart data processing
+  const chartData = useMemo(() => {
+    const last7Days = eachDayOfInterval({
+      start: subDays(new Date(), 6),
+      end: new Date()
+    });
+
+    return last7Days.map(day => {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      const displayDate = format(day, 'dd/MM');
+
+      const entries = allShipments.filter(s => 
+        format(new Date(s.createdAt), 'yyyy-MM-dd') === dateStr
+      ).reduce((acc, curr) => acc + curr.quantity, 0);
+
+      const exits = allShipments.filter(s => 
+        s.status === 'withdrawn' && 
+        s.withdrawnAt && 
+        format(new Date(s.withdrawnAt), 'yyyy-MM-dd') === dateStr
+      ).reduce((acc, curr) => acc + curr.quantity, 0);
+
+      return {
+        name: displayDate,
+        entradas: entries,
+        saidas: exits
+      };
+    });
+  }, [allShipments]);
+
+  const stats = useMemo(() => {
+    const inStock = allShipments.filter(s => s.status === 'in-stock').length;
+    const totalEntries = allShipments.reduce((acc, curr) => acc + curr.quantity, 0);
+    const totalExits = allShipments.filter(s => s.status === 'withdrawn').reduce((acc, curr) => acc + curr.quantity, 0);
+    
+    return { inStock, totalEntries, totalExits };
+  }, [allShipments]);
 
   const filteredShipments = shipments.filter(s => {
     const customer = customers[s.customerId];
@@ -115,20 +172,107 @@ export default function Dashboard({ user }: DashboardProps) {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div className="rounded-xl bg-[#111] border border-gray-800 p-6">
           <div className="flex items-center justify-between">
             <Package className="text-gray-400" size={24} />
             <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Em Estoque</span>
           </div>
-          <p className="mt-4 text-3xl font-bold text-white">{shipments.length}</p>
+          <p className="mt-4 text-3xl font-bold text-white">{stats.inStock}</p>
+        </div>
+        <div className="rounded-xl bg-[#111] border border-gray-800 p-6">
+          <div className="flex items-center justify-between">
+            <ArrowUpRight className="text-green-500" size={24} />
+            <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Entradas</span>
+          </div>
+          <p className="mt-4 text-3xl font-bold text-white">{stats.totalEntries}</p>
+        </div>
+        <div className="rounded-xl bg-[#111] border border-gray-800 p-6">
+          <div className="flex items-center justify-between">
+            <ArrowDownRight className="text-blue-500" size={24} />
+            <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Saídas</span>
+          </div>
+          <p className="mt-4 text-3xl font-bold text-white">{stats.totalExits}</p>
+        </div>
+      </div>
+
+      {/* Flow Chart */}
+      <div className="rounded-xl bg-[#111] border border-gray-800 p-6">
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <TrendingUp size={20} className="text-gray-400" />
+              Fluxo de Movimentação
+            </h3>
+            <p className="text-sm text-gray-500">Entradas e saídas nos últimos 7 dias</p>
+          </div>
+        </div>
+        
+        <div className="h-[200px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData}>
+              <defs>
+                <linearGradient id="colorEntradas" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+                </linearGradient>
+                <linearGradient id="colorSaidas" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
+              <XAxis 
+                dataKey="name" 
+                stroke="#666" 
+                fontSize={12} 
+                tickLine={false} 
+                axisLine={false} 
+              />
+              <YAxis 
+                stroke="#666" 
+                fontSize={12} 
+                tickLine={false} 
+                axisLine={false} 
+                tickFormatter={(value) => `${value}`}
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#111', 
+                  border: '1px solid #333',
+                  borderRadius: '8px',
+                  color: '#fff'
+                }}
+                itemStyle={{ fontSize: '12px' }}
+              />
+              <Legend verticalAlign="top" height={36}/>
+              <Area 
+                type="monotone" 
+                dataKey="entradas" 
+                stroke="#22c55e" 
+                strokeWidth={2}
+                fillOpacity={1} 
+                fill="url(#colorEntradas)" 
+                name="Entradas"
+              />
+              <Area 
+                type="monotone" 
+                dataKey="saidas" 
+                stroke="#3b82f6" 
+                strokeWidth={2}
+                fillOpacity={1} 
+                fill="url(#colorSaidas)" 
+                name="Saídas"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
       </div>
 
       {/* Shipments List */}
       <div className="rounded-xl bg-[#111] border border-gray-800 overflow-hidden">
         <div className="flex items-center justify-between border-b border-gray-800 p-4 bg-[#161616]">
-          <h3 className="font-semibold text-white">Remessas Atuais</h3>
+          <h3 className="font-semibold text-white">Remessas Atuais (Em Estoque)</h3>
           {selectedShipments.length > 0 && (
             <button
               onClick={() => setIsWithdrawing(true)}

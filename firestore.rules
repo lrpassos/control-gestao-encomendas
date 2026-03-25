@@ -29,6 +29,10 @@ service cloud.firestore {
       return isAdmin() || isCompanyUser(companyId);
     }
 
+    function isOwner(data) {
+      return isAuthenticated() && data.createdBy == request.auth.uid;
+    }
+
     // Rules for collections
     match /companies/{companyId} {
       allow read: if isAuthenticated();
@@ -47,10 +51,8 @@ service cloud.firestore {
     }
 
     match /customers/{customerId} {
-      allow read: if isAuthenticated() && canAccessCompany(resource.data.companyId);
-      allow create: if isAuthenticated() && canAccessCompany(request.resource.data.companyId);
-      allow update: if isAuthenticated() && canAccessCompany(resource.data.companyId);
-      allow delete: if isAuthenticated() && canAccessCompany(resource.data.companyId);
+      allow read, update, delete: if isAuthenticated() && canAccessCompany(resource.data.companyId) && (isOwner(resource.data) || isAdmin());
+      allow create: if isAuthenticated() && canAccessCompany(request.resource.data.companyId) && isOwner(request.resource.data);
     }
 
     match /distributors/{distributorId} {
@@ -61,10 +63,8 @@ service cloud.firestore {
     }
 
     match /shipments/{shipmentId} {
-      allow read: if isAuthenticated() && canAccessCompany(resource.data.companyId);
-      allow create: if isAuthenticated() && canAccessCompany(request.resource.data.companyId);
-      allow update: if isAuthenticated() && canAccessCompany(resource.data.companyId);
-      allow delete: if isAuthenticated() && canAccessCompany(resource.data.companyId);
+      allow read, update, delete: if isAuthenticated() && canAccessCompany(resource.data.companyId) && (isOwner(resource.data) || isAdmin());
+      allow create: if isAuthenticated() && canAccessCompany(request.resource.data.companyId) && isOwner(request.resource.data);
     }
   }
 }

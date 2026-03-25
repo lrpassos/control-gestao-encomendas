@@ -27,8 +27,16 @@ export default function Shipments({ user }: ShipmentsProps) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const shipmentsQ = query(collection(db, 'shipments'), where('companyId', '==', user.companyId));
-      const customersQ = query(collection(db, 'customers'), where('companyId', '==', user.companyId));
+      const shipmentsQ = query(
+        collection(db, 'shipments'), 
+        where('companyId', '==', user.companyId),
+        where('createdBy', '==', user.uid)
+      );
+      const customersQ = query(
+        collection(db, 'customers'), 
+        where('companyId', '==', user.companyId),
+        where('createdBy', '==', user.uid)
+      );
       const distributorsQ = query(collection(db, 'distributors'), where('companyId', '==', user.companyId));
 
       const [shipmentsSnap, customersSnap, distributorsSnap] = await Promise.all([
@@ -62,6 +70,7 @@ export default function Shipments({ user }: ShipmentsProps) {
       await addDoc(collection(db, 'shipments'), {
         ...newShipment,
         companyId: user.companyId,
+        createdBy: user.uid,
         status: 'in-stock',
         createdAt: new Date().toISOString()
       });

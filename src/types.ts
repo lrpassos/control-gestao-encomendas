@@ -21,6 +21,7 @@ export interface Customer {
   address: string;
   email: string;
   companyId: string;
+  createdBy: string;
 }
 
 export interface Distributor {
@@ -41,4 +42,5 @@ export interface Shipment {
   withdrawnAt?: string;
   receiverName?: string;
   receiverCpf?: string;
+  createdBy: string;
 }

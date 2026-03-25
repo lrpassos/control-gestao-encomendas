@@ -29,9 +29,10 @@
         "phone": { "type": "string" },
         "address": { "type": "string" },
         "email": { "type": "string", "format": "email" },
-        "companyId": { "type": "string" }
+        "companyId": { "type": "string" },
+        "createdBy": { "type": "string", "description": "The ID of the user who created this customer." }
       },
-      "required": ["name", "companyId"]
+      "required": ["name", "companyId", "createdBy"]
     },
     "Distributor": {
       "title": "Distributor",
@@ -57,9 +58,10 @@
         "createdAt": { "type": "string", "format": "date-time" },
         "withdrawnAt": { "type": "string", "format": "date-time" },
         "receiverName": { "type": "string" },
-        "receiverCpf": { "type": "string" }
+        "receiverCpf": { "type": "string" },
+        "createdBy": { "type": "string", "description": "The ID of the user who created this shipment." }
       },
-      "required": ["trackingCode", "quantity", "distributorId", "customerId", "companyId", "status", "createdAt"]
+      "required": ["trackingCode", "quantity", "distributorId", "customerId", "companyId", "status", "createdAt", "createdBy"]
     }
   },
   "firestore": {

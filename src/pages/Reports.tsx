@@ -21,17 +21,23 @@ export default function Reports({ user }: ReportsProps) {
   const [dateFilter, setDateFilter] = useState('');
   const [customerFilter, setCustomerFilter] = useState('');
   const [distributorFilter, setDistributorFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'in-stock' | 'withdrawn'>('in-stock');
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch all shipments for the company, ordered by date (oldest first as requested)
+      // Fetch all shipments for the company
       const shipmentsQ = query(
         collection(db, 'shipments'), 
         where('companyId', '==', user.companyId),
+        where('createdBy', '==', user.uid),
         orderBy('createdAt', 'asc')
       );
-      const customersQ = query(collection(db, 'customers'), where('companyId', '==', user.companyId));
+      const customersQ = query(
+        collection(db, 'customers'), 
+        where('companyId', '==', user.companyId),
+        where('createdBy', '==', user.uid)
+      );
       const distributorsQ = query(collection(db, 'distributors'), where('companyId', '==', user.companyId));
 
       const [shipmentsSnap, customersSnap, distributorsSnap] = await Promise.all([
@@ -60,18 +66,18 @@ export default function Reports({ user }: ReportsProps) {
     
     let matchesDate = true;
     if (dateFilter) {
-      const shipmentDate = new Date(s.createdAt);
-      const filterDate = new Date(dateFilter);
+      const dateToCompare = statusFilter === 'in-stock' ? s.createdAt : (s.withdrawnAt || s.createdAt);
+      const shipmentDate = new Date(dateToCompare);
       matchesDate = format(shipmentDate, 'yyyy-MM-dd') === dateFilter;
     }
 
-    return matchesCustomer && matchesDistributor && matchesDate && s.status === 'in-stock';
+    return matchesCustomer && matchesDistributor && matchesDate && s.status === statusFilter;
   });
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
-        <h2 className="text-2xl font-bold text-white">Relatórios de Inventário</h2>
+        <h2 className="text-2xl font-bold text-white">Relatórios de Entradas e Saídas</h2>
         <div className="flex items-center space-x-3">
           <button
             onClick={() => toast.info('Funcionalidade de exportação em breve!')}
@@ -81,6 +87,32 @@ export default function Reports({ user }: ReportsProps) {
             <span>Exportar CSV</span>
           </button>
         </div>
+      </div>
+
+      {/* Status Toggle */}
+      <div className="flex p-1 bg-[#111] border border-gray-800 rounded-xl w-fit">
+        <button
+          onClick={() => setStatusFilter('in-stock')}
+          className={cn(
+            "px-6 py-2 rounded-lg text-sm font-semibold transition-all",
+            statusFilter === 'in-stock' 
+              ? "bg-white text-black shadow-lg" 
+              : "text-gray-500 hover:text-white"
+          )}
+        >
+          Entradas (Em Estoque)
+        </button>
+        <button
+          onClick={() => setStatusFilter('withdrawn')}
+          className={cn(
+            "px-6 py-2 rounded-lg text-sm font-semibold transition-all",
+            statusFilter === 'withdrawn' 
+              ? "bg-white text-black shadow-lg" 
+              : "text-gray-500 hover:text-white"
+          )}
+        >
+          Saídas (Retirados)
+        </button>
       </div>
 
       {/* Filters */}
@@ -134,8 +166,14 @@ export default function Reports({ user }: ReportsProps) {
       {/* Report Table */}
       <div className="rounded-xl bg-[#111] border border-gray-800 overflow-hidden">
         <div className="border-b border-gray-800 p-4 bg-[#161616]">
-          <h3 className="font-semibold text-white">Remessas Atualmente em Estoque</h3>
-          <p className="text-xs text-gray-500 mt-1">Ordenado por data (mais antigo para o mais novo)</p>
+          <h3 className="font-semibold text-white">
+            {statusFilter === 'in-stock' ? 'Remessas Atualmente em Estoque' : 'Remessas Retiradas (Saídas)'}
+          </h3>
+          <p className="text-xs text-gray-500 mt-1">
+            {statusFilter === 'in-stock' 
+              ? 'Ordenado por data de entrada (mais antigo para o mais novo)' 
+              : 'Ordenado por data de saída'}
+          </p>
         </div>
 
         <div className="overflow-x-auto">
@@ -146,14 +184,24 @@ export default function Reports({ user }: ReportsProps) {
                 <th className="px-6 py-4">Cliente</th>
                 <th className="px-6 py-4">Distribuidor</th>
                 <th className="px-6 py-4">Quantidade</th>
-                <th className="px-6 py-4">Data de Entrada</th>
-                <th className="px-6 py-4">Dias em Estoque</th>
+                <th className="px-6 py-4">
+                  {statusFilter === 'in-stock' ? 'Data de Entrada' : 'Data de Saída'}
+                </th>
+                {statusFilter === 'withdrawn' && (
+                  <>
+                    <th className="px-6 py-4">Recebedor</th>
+                    <th className="px-6 py-4">CPF</th>
+                  </>
+                )}
+                <th className="px-6 py-4">
+                  {statusFilter === 'in-stock' ? 'Dias em Estoque' : 'Status'}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={statusFilter === 'withdrawn' ? 8 : 6} className="px-6 py-12 text-center text-gray-500">
                     <div className="flex justify-center">
                       <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-600 border-t-white"></div>
                     </div>
@@ -161,13 +209,19 @@ export default function Reports({ user }: ReportsProps) {
                 </tr>
               ) : filteredShipments.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                    Nenhuma remessa em estoque encontrada para os filtros selecionados.
+                  <td colSpan={statusFilter === 'withdrawn' ? 8 : 6} className="px-6 py-12 text-center text-gray-500">
+                    {statusFilter === 'in-stock' 
+                      ? 'Nenhuma remessa em estoque encontrada para os filtros selecionados.' 
+                      : 'Nenhuma remessa retirada encontrada para os filtros selecionados.'}
                   </td>
                 </tr>
               ) : (
                 filteredShipments.map((shipment) => {
                   const daysInStock = Math.floor((new Date().getTime() - new Date(shipment.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+                  const displayDate = statusFilter === 'in-stock' 
+                    ? shipment.createdAt 
+                    : (shipment.withdrawnAt || shipment.createdAt);
+
                   return (
                     <tr key={shipment.id} className="hover:bg-[#161616] transition-colors">
                       <td className="px-6 py-4 font-mono text-gray-300">{shipment.trackingCode}</td>
@@ -179,15 +233,27 @@ export default function Reports({ user }: ReportsProps) {
                       </td>
                       <td className="px-6 py-4 text-gray-300">{shipment.quantity}</td>
                       <td className="px-6 py-4 text-gray-500">
-                        {format(new Date(shipment.createdAt), 'dd/MM/yyyy HH:mm')}
+                        {format(new Date(displayDate), 'dd/MM/yyyy HH:mm')}
                       </td>
+                      {statusFilter === 'withdrawn' && (
+                        <>
+                          <td className="px-6 py-4 text-gray-300">{shipment.receiverName || '-'}</td>
+                          <td className="px-6 py-4 text-gray-400 font-mono text-xs">{shipment.receiverCpf || '-'}</td>
+                        </>
+                      )}
                       <td className="px-6 py-4">
-                        <span className={cn(
-                          "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
-                          daysInStock > 7 ? "bg-red-900/20 text-red-400" : "bg-green-900/20 text-green-400"
-                        )}>
-                          {daysInStock} {daysInStock === 1 ? 'dia' : 'dias'}
-                        </span>
+                        {statusFilter === 'in-stock' ? (
+                          <span className={cn(
+                            "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
+                            daysInStock > 7 ? "bg-red-900/20 text-red-400" : "bg-green-900/20 text-green-400"
+                          )}>
+                            {daysInStock} {daysInStock === 1 ? 'dia' : 'dias'}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-blue-900/20 text-blue-400">
+                            Retirado
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );

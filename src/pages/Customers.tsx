@@ -24,7 +24,11 @@ export default function Customers({ user }: CustomersProps) {
   const fetchCustomers = async () => {
     setLoading(true);
     try {
-      const q = query(collection(db, 'customers'), where('companyId', '==', user.companyId));
+      const q = query(
+        collection(db, 'customers'), 
+        where('companyId', '==', user.companyId),
+        where('createdBy', '==', user.uid)
+      );
       const snapshot = await getDocs(q);
       const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
       setCustomers(list);
@@ -44,7 +48,8 @@ export default function Customers({ user }: CustomersProps) {
     try {
       await addDoc(collection(db, 'customers'), {
         ...newCustomer,
-        companyId: user.companyId
+        companyId: user.companyId,
+        createdBy: user.uid
       });
       toast.success('Cliente adicionado com sucesso');
       setNewCustomer({ name: '', phone: '', address: '', email: '' });
