@@ -1,0 +1,87 @@
+{
+  "entities": {
+    "Company": {
+      "title": "Company",
+      "description": "A company that manages shipments.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "The name of the company." }
+      },
+      "required": ["name"]
+    },
+    "User": {
+      "title": "User",
+      "description": "A user of the system.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "company_user"] },
+        "companyId": { "type": "string", "description": "The ID of the company the user belongs to." }
+      },
+      "required": ["email", "role", "companyId"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "A customer who receives shipments.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "companyId": { "type": "string" }
+      },
+      "required": ["name", "companyId"]
+    },
+    "Distributor": {
+      "title": "Distributor",
+      "description": "A distributor like Shopee, Amazon, etc.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "companyId": { "type": "string" }
+      },
+      "required": ["name", "companyId"]
+    },
+    "Shipment": {
+      "title": "Shipment",
+      "description": "A shipment record.",
+      "type": "object",
+      "properties": {
+        "trackingCode": { "type": "string" },
+        "quantity": { "type": "integer" },
+        "distributorId": { "type": "string" },
+        "customerId": { "type": "string" },
+        "companyId": { "type": "string" },
+        "status": { "type": "string", "enum": ["in-stock", "withdrawn"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "withdrawnAt": { "type": "string", "format": "date-time" },
+        "receiverName": { "type": "string" },
+        "receiverCpf": { "type": "string" }
+      },
+      "required": ["trackingCode", "quantity", "distributorId", "customerId", "companyId", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/companies/{companyId}": {
+      "schema": "Company",
+      "description": "Collection of companies."
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of users."
+    },
+    "/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Collection of customers."
+    },
+    "/distributors/{distributorId}": {
+      "schema": "Distributor",
+      "description": "Collection of distributors."
+    },
+    "/shipments/{shipmentId}": {
+      "schema": "Shipment",
+      "description": "Collection of shipments."
+    }
+  }
+}

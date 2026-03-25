@@ -1,0 +1,60 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && getUserData().role == 'admin';
+    }
+
+    function isCompanyUser(companyId) {
+      return isAuthenticated() && getUserData().role == 'company_user' && getUserData().companyId == companyId;
+    }
+
+    function canAccessCompany(companyId) {
+      return isAdmin() || isCompanyUser(companyId);
+    }
+
+    // Rules for collections
+    match /companies/{companyId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated(); // Allow any auth user to create a company
+      allow update, delete: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow get: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAuthenticated(); // Allow listing to check for first user (PII risk acknowledged for this prototype)
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /customers/{customerId} {
+      allow read: if isAuthenticated() && canAccessCompany(resource.data.companyId);
+      allow create: if isAuthenticated() && canAccessCompany(request.resource.data.companyId);
+      allow update: if isAuthenticated() && canAccessCompany(resource.data.companyId);
+      allow delete: if isAuthenticated() && canAccessCompany(resource.data.companyId);
+    }
+
+    match /distributors/{distributorId} {
+      allow read: if isAuthenticated() && canAccessCompany(resource.data.companyId);
+      allow create: if isAuthenticated() && canAccessCompany(request.resource.data.companyId);
+      allow update: if isAuthenticated() && canAccessCompany(resource.data.companyId);
+      allow delete: if isAuthenticated() && canAccessCompany(resource.data.companyId);
+    }
+
+    match /shipments/{shipmentId} {
+      allow read: if isAuthenticated() && canAccessCompany(resource.data.companyId);
+      allow create: if isAuthenticated() && canAccessCompany(request.resource.data.companyId);
+      allow update: if isAuthenticated() && canAccessCompany(resource.data.companyId);
+      allow delete: if isAuthenticated() && canAccessCompany(resource.data.companyId);
+    }
+  }
+}
