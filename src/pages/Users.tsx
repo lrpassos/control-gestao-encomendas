@@ -134,10 +134,19 @@ export default function Users({ user }: UsersProps) {
       fetchUsers();
     } catch (error: any) {
       let message = error.message;
-      if (error.code === 'auth/email-already-in-use') {
-        message = 'Este e-mail já está em uso por outra conta no sistema. Por favor, use um e-mail diferente ou deixe o campo em branco para usar apenas o nome de usuário.';
+      if (error.code === 'auth/operation-not-allowed') {
+        message = `O login por E-mail/Senha não está ativado. 
+        
+        VERIFIQUE NO CONSOLE:
+        1. Projeto: ${firebaseConfig.projectId}
+        2. Menu: Authentication > Sign-in method
+        3. Provedor: E-mail/Senha (deve estar ATIVADO e SALVO).
+        
+        Se você já ativou, verifique se o ID do projeto acima (${firebaseConfig.projectId}) é exatamente o mesmo que você abriu no navegador.`;
       }
-      toast.error('Erro ao criar usuário: ' + message);
+      toast.error('Erro ao criar usuário: ' + message, {
+        duration: 10000, // Show for longer to allow reading
+      });
       setSubmitting(false);
     }
   };
