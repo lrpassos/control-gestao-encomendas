@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, addDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
 import { db, auth } from '../firebase';
 import { UserProfile, Company } from '../types';
-import { UserPlus, Search, Shield, Mail, User as UserIcon, Lock, Copy, Check } from 'lucide-react';
+import { UserPlus, Search, Shield, Mail, User as UserIcon, Lock, Copy, Check, Edit2, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Navigate } from 'react-router-dom';
 import { initializeApp, getApp, getApps } from 'firebase/app';
@@ -21,7 +21,14 @@ export default function Users({ user }: UsersProps) {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [formData, setFormData] = useState({
+    username: '',
+    email: '',
+    role: 'company_user' as 'admin' | 'company_user'
+  });
+  const [editFormData, setEditFormData] = useState({
     username: '',
     email: '',
     role: 'company_user' as 'admin' | 'company_user'
@@ -89,7 +96,6 @@ export default function Users({ user }: UsersProps) {
       const secondaryAuth = getSecondaryAuth();
 
       // Generate a unique internal email if none provided, or use the provided one
-      // We add a random suffix to internal emails to ensure they never collide in Firebase Auth
       const sanitizedUsername = formData.username.toLowerCase().replace(/[^a-z0-9]/g, '.');
       const internalEmail = formData.email || `${sanitizedUsername}.${Math.random().toString(36).substring(2, 7)}@internal.control`;
 
@@ -120,6 +126,58 @@ export default function Users({ user }: UsersProps) {
       toast.error('Erro ao criar usuário: ' + message);
       setSubmitting(false);
     }
+  };
+
+  const handleEditUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUser) return;
+    setSubmitting(true);
+
+    try {
+      // Check if username already exists (if changed)
+      if (editFormData.username !== selectedUser.username) {
+        const usernameQuery = query(collection(db, 'users'), where('username', '==', editFormData.username));
+        const usernameSnapshot = await getDocs(usernameQuery);
+        if (!usernameSnapshot.empty) {
+          throw new Error('Este nome de usuário já está em uso');
+        }
+      }
+
+      await updateDoc(doc(db, 'users', selectedUser.uid), {
+        username: editFormData.username,
+        role: editFormData.role
+      });
+
+      toast.success('Usuário atualizado com sucesso');
+      setIsEditModalOpen(false);
+      fetchUsers();
+    } catch (error: any) {
+      toast.error('Erro ao atualizar usuário: ' + error.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir este usuário? Esta ação não pode ser desfeita.')) return;
+
+    try {
+      await deleteDoc(doc(db, 'users', userId));
+      toast.success('Usuário excluído com sucesso');
+      fetchUsers();
+    } catch (error: any) {
+      toast.error('Erro ao excluir usuário: ' + error.message);
+    }
+  };
+
+  const openEditModal = (u: UserProfile) => {
+    setSelectedUser(u);
+    setEditFormData({
+      username: u.username || '',
+      email: u.email || '',
+      role: u.role as any
+    });
+    setIsEditModalOpen(true);
   };
 
   const copyToClipboard = () => {
@@ -157,12 +215,13 @@ export default function Users({ user }: UsersProps) {
                 <th className="px-6 py-4">Usuário</th>
                 <th className="px-6 py-4">E-mail</th>
                 <th className="px-6 py-4">Função</th>
+                <th className="px-6 py-4 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800">
               {loading ? (
                 <tr>
-                  <td colSpan={3} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
                     <div className="flex justify-center">
                       <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-600 border-t-white"></div>
                     </div>
@@ -170,7 +229,7 @@ export default function Users({ user }: UsersProps) {
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
                     Nenhum usuário encontrado.
                   </td>
                 </tr>
@@ -192,6 +251,26 @@ export default function Users({ user }: UsersProps) {
                       }`}>
                         {u.role === 'admin' ? 'Administrador' : 'Usuário'}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end space-x-2">
+                        <button
+                          onClick={() => openEditModal(u)}
+                          className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-all"
+                          title="Editar"
+                        >
+                          <Edit2 size={18} />
+                        </button>
+                        {u.uid !== auth.currentUser?.uid && (
+                          <button
+                            onClick={() => handleDeleteUser(u.uid)}
+                            className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-all"
+                            title="Excluir"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -236,12 +315,17 @@ export default function Users({ user }: UsersProps) {
               </div>
             ) : (
               <>
-                <h3 className="text-xl font-bold text-white">Adicionar Novo Usuário</h3>
-                <p className="mt-2 text-sm text-gray-400">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-white">Adicionar Novo Usuário</h3>
+                  <button onClick={closeAndReset} className="text-gray-500 hover:text-white">
+                    <X size={24} />
+                  </button>
+                </div>
+                <p className="text-sm text-gray-400 mb-6">
                   Crie um novo acesso para sua empresa. Uma senha provisória será gerada.
                 </p>
 
-                <form className="mt-6 space-y-4" onSubmit={handleAddUser}>
+                <form className="space-y-4" onSubmit={handleAddUser}>
                   <div>
                     <label className="block text-sm font-medium text-gray-400">Nome de Usuário (Login)</label>
                     <div className="relative mt-1">
@@ -302,6 +386,79 @@ export default function Users({ user }: UsersProps) {
                 </form>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-6 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-[#111] p-8 shadow-2xl border border-gray-800">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-white">Editar Usuário</h3>
+              <button onClick={() => setIsEditModalOpen(false)} className="text-gray-500 hover:text-white">
+                <X size={24} />
+              </button>
+            </div>
+
+            <form className="space-y-4" onSubmit={handleEditUser}>
+              <div>
+                <label className="block text-sm font-medium text-gray-400">Nome de Usuário (Login)</label>
+                <div className="relative mt-1">
+                  <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                  <input
+                    type="text"
+                    required
+                    className="block w-full rounded-lg bg-gray-900 border border-gray-800 pl-10 pr-4 py-3 text-white focus:border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-600 transition-all"
+                    value={editFormData.username}
+                    onChange={(e) => setEditFormData({ ...editFormData, username: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-400">E-mail</label>
+                <div className="relative mt-1">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500/50" size={18} />
+                  <input
+                    type="email"
+                    disabled
+                    className="block w-full rounded-lg bg-gray-800 border border-gray-800 pl-10 pr-4 py-3 text-gray-500 cursor-not-allowed"
+                    value={editFormData.email}
+                  />
+                </div>
+                <p className="mt-1 text-xs text-gray-500 italic">O e-mail de autenticação não pode ser alterado.</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-400">Função</label>
+                <select
+                  className="mt-1 block w-full rounded-lg bg-gray-900 border border-gray-800 px-4 py-3 text-white focus:border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-600 transition-all"
+                  value={editFormData.role}
+                  onChange={(e) => setEditFormData({ ...editFormData, role: e.target.value as any })}
+                >
+                  <option value="company_user">Usuário Comum</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </div>
+
+              <div className="mt-8 flex space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="flex-1 rounded-lg border border-gray-800 px-4 py-3 text-sm font-semibold text-gray-400 hover:bg-gray-900 hover:text-white transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 rounded-lg bg-white px-4 py-3 text-sm font-semibold text-black hover:bg-gray-200 transition-all disabled:opacity-50"
+                >
+                  {submitting ? 'Salvando...' : 'Salvar Alterações'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
