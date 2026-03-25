@@ -1,10 +1,10 @@
 {
-  "projectId": "controle-de-eoncomendas",
-  "appId": "1:316925315444:web:66cbdfcce473f027f48421",
-  "apiKey": "AIzaSyAgQ58JI5LUvoSgViFVRDcrIaztdypTDiA",
-  "authDomain": "controle-de-eoncomendas.firebaseapp.com",
-  "firestoreDatabaseId": "(default)",
-  "storageBucket": "controle-de-eoncomendas.firebasestorage.app",
-  "messagingSenderId": "316925315444",
-  "measurementId": "G-8BK1TVLER1"
+  "projectId": "gen-lang-client-0750765191",
+  "appId": "1:658852086623:web:bf1728b091dd3bc6e1acea",
+  "apiKey": "AIzaSyBCX2RO6vombO4Sw7_iRUM0yxBDsosNz5I",
+  "authDomain": "gen-lang-client-0750765191.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-940708aa-4936-45ea-81dc-53f8d39bd5d8",
+  "storageBucket": "gen-lang-client-0750765191.firebasestorage.app",
+  "messagingSenderId": "658852086623",
+  "measurementId": ""
 }
