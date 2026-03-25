@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, addDoc, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, doc, setDoc, updateDoc, deleteDoc, orderBy } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { UserProfile, Company } from '../types';
-import { UserPlus, Search, Shield, Mail, User as UserIcon, Lock, Copy, Check, Edit2, Trash2, X } from 'lucide-react';
+import { UserPlus, Search, Shield, Mail, User as UserIcon, Lock, Copy, Check, Edit2, Trash2, X, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Navigate } from 'react-router-dom';
 import { initializeApp, getApp, getApps } from 'firebase/app';
@@ -39,6 +39,11 @@ export default function Users({ user }: UsersProps) {
   const [copied, setCopied] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  // Super Admin filters
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState(user.companyId);
+  const isSuperAdmin = user.email === 'luiz.rogerios@gmail.com';
+
   const getSecondaryAuth = () => {
     const appName = 'Secondary';
     const app = getApps().find(a => a.name === appName) || initializeApp(firebaseConfig, appName);
@@ -49,9 +54,20 @@ export default function Users({ user }: UsersProps) {
     setLoading(true);
     const path = 'users';
     try {
-      const q = query(collection(db, path), where('companyId', '==', user.companyId));
+      if (isSuperAdmin && companies.length === 0) {
+        const companiesSnap = await getDocs(collection(db, 'companies'));
+        setCompanies(companiesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Company)));
+      }
+
+      let q;
+      if (isSuperAdmin && selectedCompanyId === 'all') {
+        q = query(collection(db, path));
+      } else {
+        q = query(collection(db, path), where('companyId', '==', selectedCompanyId));
+      }
+
       const snapshot = await getDocs(q);
-      const usersList = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
+      const usersList = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() as any } as UserProfile));
       setUsers(usersList);
     } catch (error: any) {
       handleFirestoreError(error, OperationType.LIST, path);
@@ -62,7 +78,7 @@ export default function Users({ user }: UsersProps) {
 
   useEffect(() => {
     fetchUsers();
-  }, [user.companyId]);
+  }, [selectedCompanyId]);
 
   const generateTempPassword = () => {
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
@@ -233,15 +249,32 @@ export default function Users({ user }: UsersProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
         <h2 className="text-2xl font-bold text-white">Gestão de Usuários</h2>
-        <button
-          onClick={openAddModal}
-          className="flex items-center space-x-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-gray-200 transition-all"
-        >
-          <UserPlus size={18} />
-          <span>Adicionar Usuário</span>
-        </button>
+        <div className="flex flex-col space-y-4 md:flex-row md:items-center md:space-x-4 md:space-y-0">
+          {isSuperAdmin && (
+            <div className="relative">
+              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+              <select
+                className="rounded-lg bg-[#111] border border-gray-800 pl-9 pr-4 py-2 text-sm text-white focus:border-gray-600 focus:outline-none transition-all appearance-none"
+                value={selectedCompanyId}
+                onChange={(e) => setSelectedCompanyId(e.target.value)}
+              >
+                <option value="all">Todas as Empresas</option>
+                {companies.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <button
+            onClick={openAddModal}
+            className="flex items-center space-x-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-gray-200 transition-all"
+          >
+            <UserPlus size={18} />
+            <span>Adicionar Usuário</span>
+          </button>
+        </div>
       </div>
 
       <div className="rounded-xl bg-[#111] border border-gray-800 overflow-hidden">

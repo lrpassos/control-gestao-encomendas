@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, addDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { UserProfile, Shipment, Customer, Distributor } from '../types';
-import { Plus, Trash2, Search, Package, Hash, User, Truck } from 'lucide-react';
+import { UserProfile, Shipment, Customer, Distributor, Company } from '../types';
+import { Plus, Trash2, Search, Package, Hash, User, Truck, Users as UsersIcon, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -24,20 +24,58 @@ export default function Shipments({ user }: ShipmentsProps) {
     customerId: ''
   });
 
+  // Admin filters
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [usersList, setUsersList] = useState<UserProfile[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState(user.companyId);
+  const [selectedUserId, setSelectedUserId] = useState(user.role === 'admin' ? 'all' : user.uid);
+
+  const isSuperAdmin = user.email === 'luiz.rogerios@gmail.com';
+
+  const fetchFilters = async () => {
+    if (user.role !== 'admin') return;
+    try {
+      if (isSuperAdmin && companies.length === 0) {
+        const companiesSnap = await getDocs(collection(db, 'companies'));
+        setCompanies(companiesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() as any } as Company)));
+      }
+
+      const usersQ = query(collection(db, 'users'), where('companyId', '==', selectedCompanyId));
+      const usersSnap = await getDocs(usersQ);
+      setUsersList(usersSnap.docs.map(doc => ({ uid: doc.id, ...doc.data() as any } as UserProfile)));
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
-      const shipmentsQ = query(
-        collection(db, 'shipments'), 
-        where('companyId', '==', user.companyId),
-        where('createdBy', '==', user.uid)
-      );
-      const customersQ = query(
-        collection(db, 'customers'), 
-        where('companyId', '==', user.companyId),
-        where('createdBy', '==', user.uid)
-      );
-      const distributorsQ = query(collection(db, 'distributors'), where('companyId', '==', user.companyId));
+      let shipmentsQ;
+      let customersQ;
+      
+      if (user.role === 'admin') {
+        shipmentsQ = query(
+          collection(db, 'shipments'), 
+          where('companyId', '==', selectedCompanyId)
+        );
+        customersQ = query(
+          collection(db, 'customers'), 
+          where('companyId', '==', selectedCompanyId)
+        );
+      } else {
+        shipmentsQ = query(
+          collection(db, 'shipments'), 
+          where('companyId', '==', user.companyId),
+          where('createdBy', '==', user.uid)
+        );
+        customersQ = query(
+          collection(db, 'customers'), 
+          where('companyId', '==', user.companyId),
+          where('createdBy', '==', user.uid)
+        );
+      }
+      const distributorsQ = query(collection(db, 'distributors'), where('companyId', '==', selectedCompanyId));
 
       const [shipmentsSnap, customersSnap, distributorsSnap] = await Promise.all([
         getDocs(shipmentsQ),
@@ -45,8 +83,16 @@ export default function Shipments({ user }: ShipmentsProps) {
         getDocs(distributorsQ)
       ]);
 
-      setShipments(shipmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Shipment)));
-      setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer)));
+      let shipmentsList = shipmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() as any } as Shipment));
+      let customersList = customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() as any } as Customer));
+
+      if (user.role === 'admin' && selectedUserId !== 'all') {
+        shipmentsList = shipmentsList.filter(s => s.createdBy === selectedUserId);
+        customersList = customersList.filter(c => c.createdBy === selectedUserId);
+      }
+
+      setShipments(shipmentsList);
+      setCustomers(customersList);
       setDistributors(distributorsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Distributor)));
     } catch (error: any) {
       toast.error('Falha ao buscar dados: ' + error.message);
@@ -56,8 +102,12 @@ export default function Shipments({ user }: ShipmentsProps) {
   };
 
   useEffect(() => {
+    fetchFilters();
+  }, [selectedCompanyId]);
+
+  useEffect(() => {
     fetchData();
-  }, [user.companyId]);
+  }, [selectedCompanyId, selectedUserId, user.companyId]);
 
   const handleAddShipment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,7 +152,41 @@ export default function Shipments({ user }: ShipmentsProps) {
     <div className="space-y-6">
       <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
         <h2 className="text-2xl font-bold text-white">Remessas</h2>
-        <div className="flex items-center space-x-4">
+        <div className="flex flex-col space-y-4 md:flex-row md:items-center md:space-x-4 md:space-y-0">
+          {user.role === 'admin' && (
+            <div className="flex items-center space-x-2">
+              {isSuperAdmin && companies.length > 0 && (
+                <div className="relative">
+                  <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+                  <select
+                    className="rounded-lg bg-[#111] border border-gray-800 pl-9 pr-4 py-2 text-sm text-white focus:border-gray-600 focus:outline-none transition-all appearance-none"
+                    value={selectedCompanyId}
+                    onChange={(e) => {
+                      setSelectedCompanyId(e.target.value);
+                      setSelectedUserId('all');
+                    }}
+                  >
+                    {companies.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="relative">
+                <UsersIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+                <select
+                  className="rounded-lg bg-[#111] border border-gray-800 pl-9 pr-4 py-2 text-sm text-white focus:border-gray-600 focus:outline-none transition-all appearance-none"
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                >
+                  <option value="all">Todos os Usuários</option>
+                  {usersList.map(u => (
+                    <option key={u.uid} value={u.uid}>{u.username || u.email}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
           <div className="relative w-full max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
             <input

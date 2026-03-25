@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, query, where, getDocs, updateDoc, doc, getDoc, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, updateDoc, doc, getDoc, orderBy, limit } from 'firebase/firestore';
 import { db } from '../firebase';
-import { UserProfile, Shipment, Customer, Distributor } from '../types';
-import { Search, Package, CheckCircle2, AlertCircle, Calendar, User, Hash, TrendingUp, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { UserProfile, Shipment, Customer, Distributor, Company } from '../types';
+import { Search, Package, CheckCircle2, AlertCircle, Calendar, User, Hash, TrendingUp, ArrowUpRight, ArrowDownRight, Filter, Building2, Users as UsersIcon } from 'lucide-react';
 import { format, subDays, isWithinInterval, startOfDay, endOfDay, eachDayOfInterval } from 'date-fns';
 import { toast } from 'sonner';
 import { cn } from '../lib/utils';
@@ -32,37 +32,99 @@ export default function Dashboard({ user }: DashboardProps) {
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [withdrawalData, setWithdrawalData] = useState({ receiverName: '', receiverCpf: '' });
 
+  // Admin filters
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [usersList, setUsersList] = useState<UserProfile[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState(user.companyId);
+  const [selectedUserId, setSelectedUserId] = useState(user.role === 'admin' ? 'all' : user.uid);
+
+  const isSuperAdmin = user.email === 'luiz.rogerios@gmail.com';
+
+  const fetchFilters = async () => {
+    if (user.role !== 'admin') return;
+
+    try {
+      if (isSuperAdmin) {
+        const companiesSnap = await getDocs(collection(db, 'companies'));
+        setCompanies(companiesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() as any } as Company)));
+      }
+
+      const usersQ = query(collection(db, 'users'), where('companyId', '==', selectedCompanyId));
+      const usersSnap = await getDocs(usersQ);
+      setUsersList(usersSnap.docs.map(doc => ({ uid: doc.id, ...doc.data() as any } as UserProfile)));
+    } catch (error) {
+      console.error('Error fetching filters:', error);
+    }
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch all shipments for the company to calculate flow
-      const allShipmentsQuery = query(
-        collection(db, 'shipments'),
-        where('companyId', '==', user.companyId),
-        where('createdBy', '==', user.uid),
-        orderBy('createdAt', 'desc')
-      );
-      const allShipmentsSnapshot = await getDocs(allShipmentsQuery);
-      const allShipmentsList = allShipmentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Shipment));
-      setAllShipments(allShipmentsList);
+      // Build queries based on role and filters
+      let shipmentsQ;
+      let customersQ;
+      let distributorsQ;
+
+      if (user.role === 'admin') {
+        // Admin can see all data for the selected company
+        const baseShipmentsQ = query(
+          collection(db, 'shipments'),
+          where('companyId', '==', selectedCompanyId),
+          orderBy('createdAt', 'desc')
+        );
+        shipmentsQ = baseShipmentsQ;
+
+        const baseCustomersQ = query(
+          collection(db, 'customers'),
+          where('companyId', '==', selectedCompanyId)
+        );
+        customersQ = baseCustomersQ;
+
+        distributorsQ = query(collection(db, 'distributors'), where('companyId', '==', selectedCompanyId));
+      } else {
+        // Regular user only sees their own data
+        shipmentsQ = query(
+          collection(db, 'shipments'),
+          where('companyId', '==', user.companyId),
+          where('createdBy', '==', user.uid),
+          orderBy('createdAt', 'desc')
+        );
+        customersQ = query(
+          collection(db, 'customers'), 
+          where('companyId', '==', user.companyId),
+          where('createdBy', '==', user.uid)
+        );
+        distributorsQ = query(collection(db, 'distributors'), where('companyId', '==', user.companyId));
+      }
+
+      const [shipmentsSnap, customersSnap, distributorsSnap] = await Promise.all([
+        getDocs(shipmentsQ),
+        getDocs(customersQ),
+        getDocs(distributorsQ)
+      ]);
+
+      let allShipmentsList = shipmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() as any } as Shipment));
       
-      // Filter for in-stock for the table
+      // Client-side user filtering for admin if "all" is not selected
+      if (user.role === 'admin' && selectedUserId !== 'all') {
+        allShipmentsList = allShipmentsList.filter(s => s.createdBy === selectedUserId);
+      }
+
+      setAllShipments(allShipmentsList);
       setShipments(allShipmentsList.filter(s => s.status === 'in-stock'));
 
-      // Fetch customers and distributors for mapping
-      const customersSnapshot = await getDocs(query(
-        collection(db, 'customers'), 
-        where('companyId', '==', user.companyId),
-        where('createdBy', '==', user.uid)
-      ));
-      const distributorsSnapshot = await getDocs(query(collection(db, 'distributors'), where('companyId', '==', user.companyId)));
-
       const customersMap: Record<string, Customer> = {};
-      customersSnapshot.docs.forEach(doc => { customersMap[doc.id] = { id: doc.id, ...doc.data() } as Customer; });
+      customersSnap.docs.forEach(doc => { 
+        const data = { id: doc.id, ...doc.data() as any } as Customer;
+        // Filter customers client-side if admin selected a specific user
+        if (user.role !== 'admin' || selectedUserId === 'all' || data.createdBy === selectedUserId) {
+          customersMap[doc.id] = data;
+        }
+      });
       setCustomers(customersMap);
 
       const distributorsMap: Record<string, Distributor> = {};
-      distributorsSnapshot.docs.forEach(doc => { distributorsMap[doc.id] = { id: doc.id, ...doc.data() } as Distributor; });
+      distributorsSnap.docs.forEach(doc => { distributorsMap[doc.id] = { id: doc.id, ...doc.data() as any } as Distributor; });
       setDistributors(distributorsMap);
     } catch (error: any) {
       toast.error('Falha ao buscar dados: ' + error.message);
@@ -72,8 +134,12 @@ export default function Dashboard({ user }: DashboardProps) {
   };
 
   useEffect(() => {
+    fetchFilters();
+  }, [selectedCompanyId]);
+
+  useEffect(() => {
     fetchData();
-  }, [user.companyId]);
+  }, [selectedCompanyId, selectedUserId, user.companyId]);
 
   // Chart data processing
   const chartData = useMemo(() => {
@@ -159,15 +225,51 @@ export default function Dashboard({ user }: DashboardProps) {
     <div className="space-y-6">
       <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
         <h2 className="text-2xl font-bold text-white">Dashboard</h2>
-        <div className="relative w-full max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-          <input
-            type="text"
-            placeholder="Buscar por cliente ou código de rastreio..."
-            className="w-full rounded-lg bg-[#111] border border-gray-800 pl-10 pr-4 py-2 text-sm text-white focus:border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-600 transition-all"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+        <div className="flex flex-col space-y-4 md:flex-row md:items-center md:space-x-4 md:space-y-0">
+          {user.role === 'admin' && (
+            <div className="flex items-center space-x-2">
+              {isSuperAdmin && companies.length > 0 && (
+                <div className="relative">
+                  <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+                  <select
+                    className="rounded-lg bg-[#111] border border-gray-800 pl-9 pr-4 py-2 text-sm text-white focus:border-gray-600 focus:outline-none transition-all appearance-none"
+                    value={selectedCompanyId}
+                    onChange={(e) => {
+                      setSelectedCompanyId(e.target.value);
+                      setSelectedUserId('all');
+                    }}
+                  >
+                    {companies.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="relative">
+                <UsersIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+                <select
+                  className="rounded-lg bg-[#111] border border-gray-800 pl-9 pr-4 py-2 text-sm text-white focus:border-gray-600 focus:outline-none transition-all appearance-none"
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                >
+                  <option value="all">Todos os Usuários</option>
+                  {usersList.map(u => (
+                    <option key={u.uid} value={u.uid}>{u.username || u.email}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+          <div className="relative w-full max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+            <input
+              type="text"
+              placeholder="Buscar por cliente ou código de rastreio..."
+              className="w-full rounded-lg bg-[#111] border border-gray-800 pl-10 pr-4 py-2 text-sm text-white focus:border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-600 transition-all"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
         </div>
       </div>
 
