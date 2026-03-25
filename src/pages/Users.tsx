@@ -26,7 +26,8 @@ export default function Users({ user }: UsersProps) {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
-    role: 'company_user' as 'admin' | 'company_user'
+    role: 'company_user' as 'admin' | 'company_user',
+    password: ''
   });
   const [editFormData, setEditFormData] = useState({
     username: '',
@@ -34,6 +35,7 @@ export default function Users({ user }: UsersProps) {
     role: 'company_user' as 'admin' | 'company_user'
   });
   const [generatedPassword, setGeneratedPassword] = useState('');
+  const [showSuccess, setShowSuccess] = useState(false);
   const [copied, setCopied] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -70,12 +72,23 @@ export default function Users({ user }: UsersProps) {
     return password;
   };
 
+  const openAddModal = () => {
+    const tempPass = generateTempPassword();
+    setFormData({
+      username: '',
+      email: '',
+      role: 'company_user',
+      password: tempPass
+    });
+    setIsModalOpen(true);
+  };
+
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
 
     try {
-      const tempPassword = generateTempPassword();
+      const tempPassword = formData.password;
       
       // Check if username already exists
       const usernameQuery = query(collection(db, 'users'), where('username', '==', formData.username));
@@ -116,6 +129,7 @@ export default function Users({ user }: UsersProps) {
       });
 
       setGeneratedPassword(tempPassword);
+      setShowSuccess(true);
       toast.success('Usuário criado com sucesso');
       fetchUsers();
     } catch (error: any) {
@@ -181,7 +195,8 @@ export default function Users({ user }: UsersProps) {
   };
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(generatedPassword);
+    const textToCopy = showSuccess ? generatedPassword : formData.password;
+    navigator.clipboard.writeText(textToCopy);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
     toast.success('Senha copiada para a área de transferência');
@@ -189,8 +204,9 @@ export default function Users({ user }: UsersProps) {
 
   const closeAndReset = () => {
     setIsModalOpen(false);
+    setShowSuccess(false);
     setGeneratedPassword('');
-    setFormData({ username: '', email: '', role: 'company_user' });
+    setFormData({ username: '', email: '', role: 'company_user', password: '' });
     setSubmitting(false);
   };
 
@@ -199,7 +215,7 @@ export default function Users({ user }: UsersProps) {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-white">Gestão de Usuários</h2>
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={openAddModal}
           className="flex items-center space-x-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-gray-200 transition-all"
         >
           <UserPlus size={18} />
@@ -284,7 +300,7 @@ export default function Users({ user }: UsersProps) {
       {isModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-6 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl bg-[#111] p-8 shadow-2xl border border-gray-800">
-            {generatedPassword ? (
+            {showSuccess ? (
               <div className="text-center space-y-6">
                 <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-900/30 text-green-400">
                   <Check size={32} />
@@ -322,7 +338,7 @@ export default function Users({ user }: UsersProps) {
                   </button>
                 </div>
                 <p className="text-sm text-gray-400 mb-6">
-                  Crie um novo acesso para sua empresa. Uma senha provisória será gerada.
+                  Crie um novo acesso para sua empresa. Uma senha provisória já foi gerada abaixo.
                 </p>
 
                 <form className="space-y-4" onSubmit={handleAddUser}>
@@ -353,6 +369,28 @@ export default function Users({ user }: UsersProps) {
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       />
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400">Senha Provisória</label>
+                    <div className="relative mt-1">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                      <input
+                        type="text"
+                        readOnly
+                        className="block w-full rounded-lg bg-gray-800 border border-gray-800 pl-10 pr-12 py-3 text-white font-mono focus:outline-none cursor-default"
+                        value={formData.password}
+                      />
+                      <button
+                        type="button"
+                        onClick={copyToClipboard}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-white transition-colors"
+                        title="Copiar senha"
+                      >
+                        {copied ? <Check size={18} className="text-green-400" /> : <Copy size={18} />}
+                      </button>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500 italic">Esta senha será usada para o primeiro login.</p>
                   </div>
 
                   <div>
