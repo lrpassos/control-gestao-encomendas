@@ -14,6 +14,7 @@ import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Users from './pages/Users';
 import Layout from './components/Layout';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -48,23 +49,25 @@ export default function App() {
   }
 
   return (
-    <BrowserRouter>
-      <Toaster position="top-right" theme="dark" />
-      <Routes>
-        <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
-        <Route
-          path="/"
-          element={user ? <Layout user={user} setUser={setUser} /> : <Navigate to="/login" />}
-        >
-          <Route index element={<Dashboard user={user} />} />
-          <Route path="customers" element={<Customers user={user} />} />
-          <Route path="distributors" element={<Distributors user={user} />} />
-          <Route path="shipments" element={<Shipments user={user} />} />
-          <Route path="reports" element={<Reports user={user} />} />
-          <Route path="users" element={<Users user={user} />} />
-          <Route path="settings" element={<Settings user={user} />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <Toaster position="top-right" theme="dark" />
+        <Routes>
+          <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
+          <Route
+            path="/"
+            element={user ? <Layout user={user} setUser={setUser} /> : <Navigate to="/login" />}
+          >
+            <Route index element={<Dashboard user={user} />} />
+            <Route path="customers" element={<Customers user={user} />} />
+            <Route path="distributors" element={<Distributors user={user} />} />
+            <Route path="shipments" element={<Shipments user={user} />} />
+            <Route path="reports" element={<Reports user={user} />} />
+            <Route path="users" element={<Users user={user} />} />
+            <Route path="settings" element={<Settings user={user} />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }

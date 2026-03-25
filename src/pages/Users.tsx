@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, addDoc, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
-import { db, auth } from '../firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { UserProfile, Company } from '../types';
 import { UserPlus, Search, Shield, Mail, User as UserIcon, Lock, Copy, Check, Edit2, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -47,13 +47,14 @@ export default function Users({ user }: UsersProps) {
 
   const fetchUsers = async () => {
     setLoading(true);
+    const path = 'users';
     try {
-      const q = query(collection(db, 'users'), where('companyId', '==', user.companyId));
+      const q = query(collection(db, path), where('companyId', '==', user.companyId));
       const snapshot = await getDocs(q);
       const usersList = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
       setUsers(usersList);
     } catch (error: any) {
-      toast.error('Erro ao buscar usuários: ' + error.message);
+      handleFirestoreError(error, OperationType.LIST, path);
     } finally {
       setLoading(false);
     }
@@ -86,12 +87,13 @@ export default function Users({ user }: UsersProps) {
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+    const path = 'users';
 
     try {
       const tempPassword = formData.password;
       
       // Check if username already exists
-      const usernameQuery = query(collection(db, 'users'), where('username', '==', formData.username));
+      const usernameQuery = query(collection(db, path), where('username', '==', formData.username));
       const usernameSnapshot = await getDocs(usernameQuery);
       if (!usernameSnapshot.empty) {
         throw new Error('Este nome de usuário já está em uso');
@@ -99,7 +101,7 @@ export default function Users({ user }: UsersProps) {
 
       // If email is provided, check if it's already in use in our Firestore (optional but good)
       if (formData.email) {
-        const emailQuery = query(collection(db, 'users'), where('email', '==', formData.email));
+        const emailQuery = query(collection(db, path), where('email', '==', formData.email));
         const emailSnapshot = await getDocs(emailQuery);
         if (!emailSnapshot.empty) {
           throw new Error('Este e-mail já está em uso por outro usuário');
@@ -120,7 +122,7 @@ export default function Users({ user }: UsersProps) {
       
       const newUser = userCredential.user;
 
-      await setDoc(doc(db, 'users', newUser.uid), {
+      await setDoc(doc(db, path, newUser.uid), {
         email: internalEmail,
         username: formData.username,
         role: formData.role,
@@ -133,25 +135,29 @@ export default function Users({ user }: UsersProps) {
       toast.success('Usuário criado com sucesso');
       fetchUsers();
     } catch (error: any) {
-      let message = error.message;
-      if (error.code === 'auth/operation-not-allowed') {
-        message = `O login por E-mail/Senha não está ativado. 
-        
-        VERIFIQUE NO CONSOLE:
-        1. Projeto: ${firebaseConfig.projectId}
-        2. Menu: Authentication > Sign-in method
-        3. Provedor: E-mail/Senha (deve estar ATIVADO e SALVO).`;
-      } else if (error.code === 'auth/unauthorized-domain') {
-        message = `Este domínio não está autorizado no Firebase.
-        
-        COMO RESOLVER:
-        1. Vá no Console do Firebase > Authentication > Settings > Authorized Domains.
-        2. Adicione este endereço: ${window.location.hostname}`;
+      if (error.code?.startsWith('auth/')) {
+        let message = error.message;
+        if (error.code === 'auth/operation-not-allowed') {
+          message = `O login por E-mail/Senha não está ativado. 
+          
+          VERIFIQUE NO CONSOLE:
+          1. Projeto: ${firebaseConfig.projectId}
+          2. Menu: Authentication > Sign-in method
+          3. Provedor: E-mail/Senha (deve estar ATIVADO e SALVO).`;
+        } else if (error.code === 'auth/unauthorized-domain') {
+          message = `Este domínio não está autorizado no Firebase.
+          
+          COMO RESOLVER:
+          1. Vá no Console do Firebase > Authentication > Settings > Authorized Domains.
+          2. Adicione este endereço: ${window.location.hostname}`;
+        }
+        toast.error('Erro ao criar usuário: ' + message, {
+          duration: 15000,
+        });
+        setSubmitting(false);
+      } else {
+        handleFirestoreError(error, OperationType.WRITE, path);
       }
-      toast.error('Erro ao criar usuário: ' + message, {
-        duration: 15000,
-      });
-      setSubmitting(false);
     }
   };
 
@@ -159,6 +165,7 @@ export default function Users({ user }: UsersProps) {
     e.preventDefault();
     if (!selectedUser) return;
     setSubmitting(true);
+    const path = `users/${selectedUser.uid}`;
 
     try {
       // Check if username already exists (if changed)
@@ -179,7 +186,7 @@ export default function Users({ user }: UsersProps) {
       setIsEditModalOpen(false);
       fetchUsers();
     } catch (error: any) {
-      toast.error('Erro ao atualizar usuário: ' + error.message);
+      handleFirestoreError(error, OperationType.UPDATE, path);
     } finally {
       setSubmitting(false);
     }
@@ -187,13 +194,14 @@ export default function Users({ user }: UsersProps) {
 
   const handleDeleteUser = async (userId: string) => {
     if (!window.confirm('Tem certeza que deseja excluir este usuário? Esta ação não pode ser desfeita.')) return;
+    const path = `users/${userId}`;
 
     try {
       await deleteDoc(doc(db, 'users', userId));
       toast.success('Usuário excluído com sucesso');
       fetchUsers();
     } catch (error: any) {
-      toast.error('Erro ao excluir usuário: ' + error.message);
+      handleFirestoreError(error, OperationType.DELETE, path);
     }
   };
 

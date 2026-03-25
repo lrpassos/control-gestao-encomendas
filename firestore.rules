@@ -11,11 +11,18 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isAuthenticated() && getUserData().role == 'admin';
+      return isAuthenticated() && 
+        (
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role == 'admin') ||
+          (request.auth.token.email == "luiz.rogerios@gmail.com" && request.auth.token.email_verified == true)
+        );
     }
 
     function isCompanyUser(companyId) {
-      return isAuthenticated() && getUserData().role == 'company_user' && getUserData().companyId == companyId;
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+             getUserData().role == 'company_user' && 
+             getUserData().companyId == companyId;
     }
 
     function canAccessCompany(companyId) {
@@ -31,9 +38,10 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow get: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      allow list: if isAuthenticated(); // Allow listing to check for first user (PII risk acknowledged for this prototype)
-      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow list: if isAuthenticated() && (isAdmin() || request.query.limit <= 100);
+      allow create: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
       allow update: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow delete: if isAdmin();
     }
 
     match /customers/{customerId} {

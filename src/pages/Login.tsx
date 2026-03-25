@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, updatePassword } from 'firebase/auth';
 import { doc, setDoc, getDoc, getDocs, collection, addDoc, query, where, limit, updateDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { toast } from 'sonner';
 import { LogIn, User as UserIcon, Lock, ShieldCheck } from 'lucide-react';
 
@@ -26,24 +26,38 @@ export default function Login() {
       const { user } = userCredential;
 
       // Check if profile exists
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      const userPath = `users/${user.uid}`;
+      let userDoc;
+      try {
+        userDoc = await getDoc(doc(db, 'users', user.uid));
+      } catch (error) {
+        handleFirestoreError(error, OperationType.GET, userPath);
+        return;
+      }
       
       if (!userDoc.exists()) {
-        const usersQuery = query(collection(db, 'users'), limit(1));
-        const usersSnapshot = await getDocs(usersQuery);
-        const isFirstUser = usersSnapshot.empty;
+        const usersPath = 'users';
+        const companiesPath = 'companies';
+        
+        try {
+          const usersQuery = query(collection(db, usersPath), limit(1));
+          const usersSnapshot = await getDocs(usersQuery);
+          const isFirstUser = usersSnapshot.empty;
 
-        const companyRef = await addDoc(collection(db, 'companies'), {
-          name: 'Empresa Padrão'
-        });
+          const companyRef = await addDoc(collection(db, companiesPath), {
+            name: 'Empresa Padrão'
+          });
 
-        await setDoc(doc(db, 'users', user.uid), {
-          email: user.email,
-          role: isFirstUser ? 'admin' : 'company_user',
-          companyId: companyRef.id
-        });
+          await setDoc(doc(db, usersPath, user.uid), {
+            email: user.email,
+            role: isFirstUser ? 'admin' : 'company_user',
+            companyId: companyRef.id
+          });
 
-        toast.success('Conta configurada com sucesso');
+          toast.success('Conta configurada com sucesso');
+        } catch (error) {
+          handleFirestoreError(error, OperationType.WRITE, usersPath);
+        }
       } else {
         toast.success('Login realizado com sucesso');
       }
@@ -62,21 +76,34 @@ export default function Login() {
       let email = identifier;
 
       if (!identifier.includes('@')) {
-        const q = query(collection(db, 'users'), where('username', '==', identifier), limit(1));
-        const snapshot = await getDocs(q);
-        
-        if (snapshot.empty) {
-          throw new Error('Usuário não encontrado');
+        const usersPath = 'users';
+        try {
+          const q = query(collection(db, usersPath), where('username', '==', identifier), limit(1));
+          const snapshot = await getDocs(q);
+          
+          if (snapshot.empty) {
+            throw new Error('Usuário não encontrado');
+          }
+          
+          email = snapshot.docs[0].data().email;
+        } catch (error) {
+          handleFirestoreError(error, OperationType.LIST, usersPath);
         }
-        
-        email = snapshot.docs[0].data().email;
       }
 
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const { user } = userCredential;
 
       // Check if user must change password
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      const userPath = `users/${user.uid}`;
+      let userDoc;
+      try {
+        userDoc = await getDoc(doc(db, 'users', user.uid));
+      } catch (error) {
+        handleFirestoreError(error, OperationType.GET, userPath);
+        return;
+      }
+      
       const userData = userDoc.data();
 
       if (userData?.mustChangePassword) {
@@ -114,13 +141,17 @@ export default function Login() {
       await updatePassword(user, newPassword);
       
       // Update Firestore flag
-      await updateDoc(doc(db, 'users', user.uid), {
-        mustChangePassword: false
-      });
+      const userPath = `users/${user.uid}`;
+      try {
+        await updateDoc(doc(db, 'users', user.uid), {
+          mustChangePassword: false
+        });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, userPath);
+      }
 
       toast.success('Senha atualizada com sucesso!');
       setMustChange(false);
-      // The app will now redirect as usual because mustChange is false
     } catch (error: any) {
       toast.error('Erro ao atualizar senha: ' + error.message);
     } finally {
