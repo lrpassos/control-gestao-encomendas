@@ -140,12 +140,16 @@ export default function Users({ user }: UsersProps) {
         VERIFIQUE NO CONSOLE:
         1. Projeto: ${firebaseConfig.projectId}
         2. Menu: Authentication > Sign-in method
-        3. Provedor: E-mail/Senha (deve estar ATIVADO e SALVO).
+        3. Provedor: E-mail/Senha (deve estar ATIVADO e SALVO).`;
+      } else if (error.code === 'auth/unauthorized-domain') {
+        message = `Este domínio não está autorizado no Firebase.
         
-        Se você já ativou, verifique se o ID do projeto acima (${firebaseConfig.projectId}) é exatamente o mesmo que você abriu no navegador.`;
+        COMO RESOLVER:
+        1. Vá no Console do Firebase > Authentication > Settings > Authorized Domains.
+        2. Adicione este endereço: ${window.location.hostname}`;
       }
       toast.error('Erro ao criar usuário: ' + message, {
-        duration: 10000, // Show for longer to allow reading
+        duration: 15000,
       });
       setSubmitting(false);
     }
