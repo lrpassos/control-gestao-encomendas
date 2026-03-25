@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, addDoc, deleteDoc, doc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { UserProfile, Shipment, Customer, Distributor, Company } from '../types';
 import { Plus, Trash2, Search, Package, Hash, User, Truck, Users as UsersIcon, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -44,7 +44,7 @@ export default function Shipments({ user }: ShipmentsProps) {
       const usersSnap = await getDocs(usersQ);
       setUsersList(usersSnap.docs.map(doc => ({ uid: doc.id, ...doc.data() as any } as UserProfile)));
     } catch (error) {
-      console.error('Error fetching users:', error);
+      handleFirestoreError(error, OperationType.LIST, 'filters');
     }
   };
 
@@ -95,7 +95,7 @@ export default function Shipments({ user }: ShipmentsProps) {
       setCustomers(customersList);
       setDistributors(distributorsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Distributor)));
     } catch (error: any) {
-      toast.error('Falha ao buscar dados: ' + error.message);
+      handleFirestoreError(error, OperationType.LIST, 'shipments/data');
     } finally {
       setLoading(false);
     }
@@ -129,7 +129,7 @@ export default function Shipments({ user }: ShipmentsProps) {
       setIsAdding(false);
       fetchData();
     } catch (error: any) {
-      toast.error('Falha ao adicionar remessa: ' + error.message);
+      handleFirestoreError(error, OperationType.CREATE, 'shipments');
     }
   };
 
@@ -140,7 +140,7 @@ export default function Shipments({ user }: ShipmentsProps) {
       toast.success('Remessa excluída com sucesso');
       fetchData();
     } catch (error: any) {
-      toast.error('Falha ao excluir remessa: ' + error.message);
+      handleFirestoreError(error, OperationType.DELETE, 'shipments/' + id);
     }
   };
 

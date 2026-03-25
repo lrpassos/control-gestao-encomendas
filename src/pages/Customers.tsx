@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, addDoc, deleteDoc, doc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { UserProfile, Customer, Company } from '../types';
 import { Plus, Trash2, Search, User, Phone, MapPin, Mail, Users as UsersIcon, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -41,7 +41,7 @@ export default function Customers({ user }: CustomersProps) {
       const usersSnap = await getDocs(usersQ);
       setUsersList(usersSnap.docs.map(doc => ({ uid: doc.id, ...doc.data() as any } as UserProfile)));
     } catch (error) {
-      console.error('Error fetching users:', error);
+      handleFirestoreError(error, OperationType.LIST, 'filters');
     }
   };
 
@@ -70,7 +70,7 @@ export default function Customers({ user }: CustomersProps) {
 
       setCustomers(list);
     } catch (error: any) {
-      toast.error('Falha ao buscar clientes: ' + error.message);
+      handleFirestoreError(error, OperationType.LIST, 'customers');
     } finally {
       setLoading(false);
     }
@@ -97,7 +97,7 @@ export default function Customers({ user }: CustomersProps) {
       setIsAdding(false);
       fetchCustomers();
     } catch (error: any) {
-      toast.error('Falha ao adicionar cliente: ' + error.message);
+      handleFirestoreError(error, OperationType.CREATE, 'customers');
     }
   };
 
@@ -108,7 +108,7 @@ export default function Customers({ user }: CustomersProps) {
       toast.success('Cliente excluído com sucesso');
       fetchCustomers();
     } catch (error: any) {
-      toast.error('Falha ao excluir cliente: ' + error.message);
+      handleFirestoreError(error, OperationType.DELETE, 'customers/' + id);
     }
   };
 

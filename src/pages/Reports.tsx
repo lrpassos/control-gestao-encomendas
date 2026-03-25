@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { UserProfile, Shipment, Customer, Distributor, Company } from '../types';
 import { BarChart3, Filter, Download, Calendar, User, Truck, Users as UsersIcon, Building2 } from 'lucide-react';
 import { format, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
@@ -43,7 +43,7 @@ export default function Reports({ user }: ReportsProps) {
       const usersSnap = await getDocs(usersQ);
       setUsersList(usersSnap.docs.map(doc => ({ uid: doc.id, ...doc.data() as any } as UserProfile)));
     } catch (error) {
-      console.error('Error fetching users:', error);
+      handleFirestoreError(error, OperationType.LIST, 'filters');
     }
   };
 
@@ -96,7 +96,7 @@ export default function Reports({ user }: ReportsProps) {
       setCustomers(customersList);
       setDistributors(distributorsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Distributor)));
     } catch (error: any) {
-      toast.error('Falha ao buscar dados: ' + error.message);
+      handleFirestoreError(error, OperationType.LIST, 'reports/data');
     } finally {
       setLoading(false);
     }

@@ -1,7 +1,54 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper functions
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: companies
+    // Fields:
+    //   - name: string (required, 1-100 chars)
+    //
+    // Collection: users
+    // Fields:
+    //   - email: string (required, email format)
+    //   - username: string (optional, 3-30 chars)
+    //   - role: string (required, enum: ['admin', 'company_user'])
+    //   - companyId: string (required)
+    //   - active: bool (optional, default: true)
+    //   - mustChangePassword: bool (optional)
+    //
+    // Collection: customers
+    // Fields:
+    //   - name: string (required, 1-100 chars)
+    //   - phone: string (optional, 8-20 chars)
+    //   - address: string (optional, 1-200 chars)
+    //   - email: string (optional, email format)
+    //   - companyId: string (required)
+    //   - createdBy: string (required, matches auth.uid)
+    //
+    // Collection: distributors
+    // Fields:
+    //   - name: string (required, 1-100 chars)
+    //   - companyId: string (required)
+    //
+    // Collection: shipments
+    // Fields:
+    //   - trackingCode: string (required, 1-50 chars)
+    //   - quantity: int (required, > 0)
+    //   - distributorId: string (required)
+    //   - customerId: string (required)
+    //   - companyId: string (required)
+    //   - status: string (required, enum: ['in-stock', 'withdrawn'])
+    //   - createdAt: string (required, ISO 8601)
+    //   - withdrawnAt: string (optional, ISO 8601)
+    //   - receiverName: string (optional, 1-100 chars)
+    //   - receiverCpf: string (optional, 11-14 chars)
+    //   - createdBy: string (required, matches auth.uid)
+    //
+    // ===============================================================
+
+    // Helper Functions
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -39,38 +86,100 @@ service cloud.firestore {
       return isActive() && data.createdBy == request.auth.uid;
     }
 
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // Domain Validators
+    function isValidCompany(data) {
+      return hasOnlyAllowedFields(['name']) &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 100;
+    }
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['email', 'username', 'role', 'companyId', 'active', 'mustChangePassword']) &&
+             isValidEmail(data.email) &&
+             (!('username' in data) || (data.username is string && data.username.size() >= 3 && data.username.size() <= 30)) &&
+             data.role in ['admin', 'company_user'] &&
+             data.companyId is string &&
+             (!('active' in data) || data.active is bool) &&
+             (!('mustChangePassword' in data) || data.mustChangePassword is bool);
+    }
+
+    function isValidCustomer(data) {
+      return hasOnlyAllowedFields(['name', 'phone', 'address', 'email', 'companyId', 'createdBy']) &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() >= 8 && data.phone.size() <= 20)) &&
+             (!('address' in data) || (data.address is string && data.address.size() >= 1 && data.address.size() <= 200)) &&
+             (!('email' in data) || isValidEmail(data.email)) &&
+             data.companyId is string &&
+             data.createdBy is string;
+    }
+
+    function isValidDistributor(data) {
+      return hasOnlyAllowedFields(['name', 'companyId']) &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+             data.companyId is string;
+    }
+
+    function isValidShipment(data) {
+      return hasOnlyAllowedFields(['trackingCode', 'quantity', 'distributorId', 'customerId', 'companyId', 'status', 'createdAt', 'withdrawnAt', 'receiverName', 'receiverCpf', 'createdBy']) &&
+             data.trackingCode is string && data.trackingCode.size() >= 1 && data.trackingCode.size() <= 50 &&
+             data.quantity is int && data.quantity > 0 &&
+             data.distributorId is string &&
+             data.customerId is string &&
+             data.companyId is string &&
+             data.status in ['in-stock', 'withdrawn'] &&
+             isValidDateString(data.createdAt) &&
+             (!('withdrawnAt' in data) || isValidDateString(data.withdrawnAt)) &&
+             (!('receiverName' in data) || (data.receiverName is string && data.receiverName.size() >= 1 && data.receiverName.size() <= 100)) &&
+             (!('receiverCpf' in data) || (data.receiverCpf is string && data.receiverCpf.size() >= 11 && data.receiverCpf.size() <= 14)) &&
+             data.createdBy is string;
+    }
+
     // Rules for collections
     match /companies/{companyId} {
       allow read: if isActive();
-      allow create: if isActive(); // Allow any auth user to create a company
-      allow update, delete: if isAdmin();
+      allow create: if isActive() && isValidCompany(request.resource.data);
+      allow update: if isAdmin() && isValidCompany(request.resource.data);
+      allow delete: if isAdmin();
     }
 
     match /users/{userId} {
       allow get: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      // Allow unauthenticated list with limit 1 to support login by username
-      allow list: if (isActive() && (isAdmin() || request.query.limit <= 100)) || 
-                     (!isAuthenticated() && request.query.limit == 1);
-      allow create: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      allow update: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow list: if isActive() && isAdmin();
+      allow create: if isAuthenticated() && (request.auth.uid == userId || isAdmin()) && isValidUser(request.resource.data);
+      allow update: if isAuthenticated() && (request.auth.uid == userId || isAdmin()) && isValidUser(request.resource.data);
       allow delete: if isAdmin();
     }
 
     match /customers/{customerId} {
-      allow read, update, delete: if isActive() && canAccessCompany(resource.data.companyId) && (isOwner(resource.data) || isAdmin());
-      allow create: if isActive() && canAccessCompany(request.resource.data.companyId) && isOwner(request.resource.data);
+      allow read: if isActive() && canAccessCompany(resource.data.companyId);
+      allow create: if isActive() && canAccessCompany(request.resource.data.companyId) && request.resource.data.createdBy == request.auth.uid && isValidCustomer(request.resource.data);
+      allow update: if isActive() && canAccessCompany(resource.data.companyId) && (isOwner(resource.data) || isAdmin()) && isValidCustomer(request.resource.data);
+      allow delete: if isAdmin();
     }
 
     match /distributors/{distributorId} {
       allow read: if isActive() && canAccessCompany(resource.data.companyId);
-      allow create: if isActive() && canAccessCompany(request.resource.data.companyId);
-      allow update: if isActive() && canAccessCompany(resource.data.companyId);
-      allow delete: if isActive() && canAccessCompany(resource.data.companyId);
+      allow create: if isActive() && canAccessCompany(request.resource.data.companyId) && isValidDistributor(request.resource.data);
+      allow update: if isActive() && canAccessCompany(resource.data.companyId) && isAdmin() && isValidDistributor(request.resource.data);
+      allow delete: if isAdmin();
     }
 
     match /shipments/{shipmentId} {
-      allow read, update, delete: if isActive() && canAccessCompany(resource.data.companyId) && (isOwner(resource.data) || isAdmin());
-      allow create: if isActive() && canAccessCompany(request.resource.data.companyId) && isOwner(request.resource.data);
+      allow read: if isActive() && canAccessCompany(resource.data.companyId);
+      allow create: if isActive() && canAccessCompany(request.resource.data.companyId) && request.resource.data.createdBy == request.auth.uid && isValidShipment(request.resource.data);
+      allow update: if isActive() && canAccessCompany(resource.data.companyId) && (isOwner(resource.data) || isAdmin()) && isValidShipment(request.resource.data);
+      allow delete: if isAdmin();
     }
   }
 }

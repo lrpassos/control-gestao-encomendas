@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, addDoc, deleteDoc, doc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { UserProfile, Distributor } from '../types';
 import { Plus, Trash2, Search, Truck } from 'lucide-react';
 import { toast } from 'sonner';
@@ -24,7 +24,7 @@ export default function Distributors({ user }: DistributorsProps) {
       const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Distributor));
       setDistributors(list);
     } catch (error: any) {
-      toast.error('Falha ao buscar distribuidores: ' + error.message);
+      handleFirestoreError(error, OperationType.LIST, 'distributors');
     } finally {
       setLoading(false);
     }
@@ -46,7 +46,7 @@ export default function Distributors({ user }: DistributorsProps) {
       setIsAdding(false);
       fetchDistributors();
     } catch (error: any) {
-      toast.error('Falha ao adicionar distribuidor: ' + error.message);
+      handleFirestoreError(error, OperationType.CREATE, 'distributors');
     }
   };
 
@@ -57,7 +57,7 @@ export default function Distributors({ user }: DistributorsProps) {
       toast.success('Distribuidor excluído com sucesso');
       fetchDistributors();
     } catch (error: any) {
-      toast.error('Falha ao excluir distribuidor: ' + error.message);
+      handleFirestoreError(error, OperationType.DELETE, 'distributors/' + id);
     }
   };
 

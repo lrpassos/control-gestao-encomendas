@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, where, getDocs, updateDoc, doc, getDoc, orderBy, limit } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { UserProfile, Shipment, Customer, Distributor, Company } from '../types';
 import { Search, Package, CheckCircle2, AlertCircle, Calendar, User, Hash, TrendingUp, ArrowUpRight, ArrowDownRight, Filter, Building2, Users as UsersIcon } from 'lucide-react';
 import { format, subDays, isWithinInterval, startOfDay, endOfDay, eachDayOfInterval } from 'date-fns';
@@ -53,7 +53,7 @@ export default function Dashboard({ user }: DashboardProps) {
       const usersSnap = await getDocs(usersQ);
       setUsersList(usersSnap.docs.map(doc => ({ uid: doc.id, ...doc.data() as any } as UserProfile)));
     } catch (error) {
-      console.error('Error fetching filters:', error);
+      handleFirestoreError(error, OperationType.LIST, 'filters');
     }
   };
 
@@ -127,7 +127,7 @@ export default function Dashboard({ user }: DashboardProps) {
       distributorsSnap.docs.forEach(doc => { distributorsMap[doc.id] = { id: doc.id, ...doc.data() as any } as Distributor; });
       setDistributors(distributorsMap);
     } catch (error: any) {
-      toast.error('Falha ao buscar dados: ' + error.message);
+      handleFirestoreError(error, OperationType.LIST, 'dashboard_data');
     } finally {
       setLoading(false);
     }
@@ -217,7 +217,7 @@ export default function Dashboard({ user }: DashboardProps) {
       setIsWithdrawing(false);
       fetchData();
     } catch (error: any) {
-      toast.error('Falha na retirada: ' + error.message);
+      handleFirestoreError(error, OperationType.UPDATE, 'shipments');
     }
   };
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from './firebase';
+import { auth, db, handleFirestoreError, OperationType } from './firebase';
 import { toast } from 'sonner';
 import { UserProfile } from './types';
 import { Toaster } from 'sonner';
@@ -23,26 +23,32 @@ export default function App() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          if (userData.active === false) {
-            await auth.signOut();
-            setUser(null);
-            toast.error('Sua conta foi desativada.');
+      try {
+        if (firebaseUser) {
+          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            if (userData.active === false) {
+              await auth.signOut();
+              setUser(null);
+              toast.error('Sua conta foi desativada.');
+            } else {
+              setUser({ uid: firebaseUser.uid, ...userData } as UserProfile);
+            }
           } else {
-            setUser({ uid: firebaseUser.uid, ...userData } as UserProfile);
+            // Profile is missing, but don't sign out yet. 
+            // The Login page will handle completing the profile.
+            setUser(null);
           }
         } else {
-          // Profile is missing, but don't sign out yet. 
-          // The Login page will handle completing the profile.
           setUser(null);
         }
-      } else {
+      } catch (error) {
+        handleFirestoreError(error, OperationType.GET, 'users/' + firebaseUser?.uid);
         setUser(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();
