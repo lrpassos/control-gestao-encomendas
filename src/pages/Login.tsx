@@ -68,7 +68,13 @@ export default function Login() {
         toast.success('Login realizado com sucesso');
       }
     } catch (error: any) {
-      toast.error(error.message);
+      if (error.code === 'auth/unauthorized-domain') {
+        toast.error('Domínio não autorizado no Firebase. Adicione ' + window.location.hostname + ' aos domínios autorizados no Console do Firebase.', {
+          duration: 10000
+        });
+      } else {
+        toast.error(error.message);
+      }
     } finally {
       setLoading(false);
     }
