@@ -27,12 +27,14 @@ export default function Users({ user }: UsersProps) {
     username: '',
     email: '',
     role: 'company_user' as 'admin' | 'company_user',
-    password: ''
+    password: '',
+    active: true
   });
   const [editFormData, setEditFormData] = useState({
     username: '',
     email: '',
-    role: 'company_user' as 'admin' | 'company_user'
+    role: 'company_user' as 'admin' | 'company_user',
+    active: true
   });
   const [generatedPassword, setGeneratedPassword] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
@@ -95,7 +97,8 @@ export default function Users({ user }: UsersProps) {
       username: '',
       email: '',
       role: 'company_user',
-      password: tempPass
+      password: tempPass,
+      active: true
     });
     setIsModalOpen(true);
   };
@@ -143,7 +146,8 @@ export default function Users({ user }: UsersProps) {
         username: formData.username,
         role: formData.role,
         companyId: user.companyId,
-        mustChangePassword: true
+        mustChangePassword: true,
+        active: formData.active
       });
 
       setGeneratedPassword(tempPassword);
@@ -195,7 +199,8 @@ export default function Users({ user }: UsersProps) {
 
       await updateDoc(doc(db, 'users', selectedUser.uid), {
         username: editFormData.username,
-        role: editFormData.role
+        role: editFormData.role,
+        active: editFormData.active
       });
 
       toast.success('Usuário atualizado com sucesso');
@@ -226,7 +231,8 @@ export default function Users({ user }: UsersProps) {
     setEditFormData({
       username: u.username || '',
       email: u.email || '',
-      role: u.role as any
+      role: u.role as any,
+      active: u.active !== false
     });
     setIsEditModalOpen(true);
   };
@@ -243,7 +249,7 @@ export default function Users({ user }: UsersProps) {
     setIsModalOpen(false);
     setShowSuccess(false);
     setGeneratedPassword('');
-    setFormData({ username: '', email: '', role: 'company_user', password: '' });
+    setFormData({ username: '', email: '', role: 'company_user', password: '', active: true });
     setSubmitting(false);
   };
 
@@ -285,6 +291,7 @@ export default function Users({ user }: UsersProps) {
                 <th className="px-6 py-4">Usuário</th>
                 <th className="px-6 py-4">E-mail</th>
                 <th className="px-6 py-4">Função</th>
+                <th className="px-6 py-4">Status</th>
                 <th className="px-6 py-4 text-right">Ações</th>
               </tr>
             </thead>
@@ -320,6 +327,13 @@ export default function Users({ user }: UsersProps) {
                         u.role === 'admin' ? 'bg-purple-900/30 text-purple-400' : 'bg-blue-900/30 text-blue-400'
                       }`}>
                         {u.role === 'admin' ? 'Administrador' : 'Usuário'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        u.active !== false ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'
+                      }`}>
+                        {u.active !== false ? 'Ativo' : 'Inativo'}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
@@ -459,6 +473,19 @@ export default function Users({ user }: UsersProps) {
                     </select>
                   </div>
 
+                  <div className="flex items-center space-x-3 py-2">
+                    <input
+                      type="checkbox"
+                      id="active"
+                      className="h-4 w-4 rounded border-gray-800 bg-gray-900 text-white focus:ring-gray-600"
+                      checked={formData.active}
+                      onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
+                    />
+                    <label htmlFor="active" className="text-sm font-medium text-gray-400 cursor-pointer">
+                      Usuário Ativo
+                    </label>
+                  </div>
+
                   <div className="mt-8 flex space-x-3">
                     <button
                       type="button"
@@ -532,6 +559,19 @@ export default function Users({ user }: UsersProps) {
                   <option value="company_user">Usuário Comum</option>
                   <option value="admin">Administrador</option>
                 </select>
+              </div>
+
+              <div className="flex items-center space-x-3 py-2">
+                <input
+                  type="checkbox"
+                  id="edit-active"
+                  className="h-4 w-4 rounded border-gray-800 bg-gray-900 text-white focus:ring-gray-600"
+                  checked={editFormData.active}
+                  onChange={(e) => setEditFormData({ ...editFormData, active: e.target.checked })}
+                />
+                <label htmlFor="edit-active" className="text-sm font-medium text-gray-400 cursor-pointer">
+                  Usuário Ativo
+                </label>
               </div>
 
               <div className="mt-8 flex space-x-3">

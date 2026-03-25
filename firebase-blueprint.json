@@ -16,7 +16,8 @@
       "properties": {
         "email": { "type": "string", "format": "email" },
         "role": { "type": "string", "enum": ["admin", "company_user"] },
-        "companyId": { "type": "string", "description": "The ID of the company the user belongs to." }
+        "companyId": { "type": "string", "description": "The ID of the company the user belongs to." },
+        "active": { "type": "boolean", "description": "Whether the user account is active." }
       },
       "required": ["email", "role", "companyId"]
     },

@@ -51,7 +51,8 @@ export default function Login() {
           await setDoc(doc(db, usersPath, user.uid), {
             email: user.email,
             role: isFirstUser ? 'admin' : 'company_user',
-            companyId: companyRef.id
+            companyId: companyRef.id,
+            active: true
           });
 
           toast.success('Conta configurada com sucesso');
@@ -59,6 +60,11 @@ export default function Login() {
           handleFirestoreError(error, OperationType.WRITE, usersPath);
         }
       } else {
+        const userData = userDoc.data();
+        if (userData.active === false) {
+          await auth.signOut();
+          throw new Error('Sua conta está inativa. Entre em contato com o administrador.');
+        }
         toast.success('Login realizado com sucesso');
       }
     } catch (error: any) {
@@ -105,6 +111,11 @@ export default function Login() {
       }
       
       const userData = userDoc.data();
+
+      if (userData?.active === false) {
+        await auth.signOut();
+        throw new Error('Sua conta está inativa. Entre em contato com o administrador.');
+      }
 
       if (userData?.mustChangePassword) {
         setMustChange(true);

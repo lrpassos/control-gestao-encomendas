@@ -12,6 +12,7 @@ export interface UserProfile {
   role: UserRole;
   companyId: string;
   mustChangePassword?: boolean;
+  active?: boolean;
 }
 
 export interface Customer {
