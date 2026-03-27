@@ -64,7 +64,7 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isActive() && 
+      return isAuthenticated() && 
         (
           (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role == 'admin') ||
           (request.auth.token.email == "luiz.rogerios@gmail.com") ||
@@ -106,7 +106,7 @@ service cloud.firestore {
     }
 
     function isValidUser(data) {
-      return hasOnlyAllowedFields(['email', 'username', 'role', 'companyId', 'active', 'mustChangePassword']) &&
+      return hasOnlyAllowedFields(['email', 'username', 'role', 'companyId', 'active', 'mustChangePassword', 'uid']) &&
              isValidEmail(data.email) &&
              (!('username' in data) || (data.username is string && data.username.size() >= 3 && data.username.size() <= 30)) &&
              data.role in ['admin', 'company_user'] &&
@@ -156,10 +156,10 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow get: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      // Allow unauthenticated list with limit 1 to support login by username
-      allow list: if (isActive() && isAdmin()) || (!isAuthenticated() && request.query.limit == 1);
-      allow create: if isAuthenticated() && (request.auth.uid == userId || isAdmin()) && isValidUser(request.resource.data);
-      allow update: if isAuthenticated() && (request.auth.uid == userId || isAdmin()) && isValidUser(request.resource.data);
+      // Allow list with limit 1 to support login by username/email resolution
+      allow list: if (isActive() && isAdmin()) || (request.query.limit == 1);
+      allow create: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow update: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
       allow delete: if isAdmin();
     }
 

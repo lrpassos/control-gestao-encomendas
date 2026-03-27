@@ -1,11 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { auth, db, handleFirestoreError, OperationType } from './firebase';
-import { toast } from 'sonner';
-import { UserProfile } from './types';
 import { Toaster } from 'sonner';
+import { UserProfile } from './types';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Customers from './pages/Customers';
@@ -17,61 +13,51 @@ import Settings from './pages/Settings';
 import Users from './pages/Users';
 import Layout from './components/Layout';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { signInWithCustomToken } from 'firebase/auth';
+import { auth } from './firebase';
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let unsubscribeDoc: (() => void) | null = null;
-
-    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      console.log('Auth state changed:', firebaseUser?.uid);
-      
-      if (unsubscribeDoc) {
-        unsubscribeDoc();
-        unsubscribeDoc = null;
+    const checkAuth = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setLoading(false);
+        return;
       }
 
-      if (firebaseUser) {
-        const userRef = doc(db, 'users', firebaseUser.uid);
-        unsubscribeDoc = onSnapshot(userRef, (userDoc) => {
-          console.log('User doc snapshot received. Exists:', userDoc.exists());
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
-            console.log('User data:', userData);
-            if (userData.active === false) {
-              auth.signOut();
-              setUser(null);
-              toast.error('Sua conta foi desativada.');
-            } else {
-              setUser({ uid: firebaseUser.uid, ...userData } as UserProfile);
-            }
-          } else {
-            console.log('User doc does not exist yet for UID:', firebaseUser.uid);
-            setUser(null);
+      try {
+        const res = await fetch('/api/auth/me', {
+          headers: {
+            'Authorization': `Bearer ${token}`
           }
-          setLoading(false);
-        }, (error) => {
-          console.error('Snapshot error for UID:', firebaseUser.uid, error);
-          // If it's a permission error, it might be because the doc doesn't exist yet
-          // and the rules are strict. We'll just set user to null and stop loading.
-          setUser(null);
-          setLoading(false);
-          // Don't show toast for every snapshot error to avoid spamming during bootstrap
         });
-      } else {
-        console.log('No firebase user');
-        setUser(null);
+        
+        if (res.ok) {
+          const userData = await res.json();
+          if (userData.firebaseToken) {
+            await signInWithCustomToken(auth, userData.firebaseToken);
+          }
+          setUser(userData);
+        } else {
+          localStorage.removeItem('token');
+        }
+      } catch (error) {
+        console.error('Auth check failed:', error);
+      } finally {
         setLoading(false);
       }
-    });
-
-    return () => {
-      unsubscribeAuth();
-      if (unsubscribeDoc) unsubscribeDoc();
     };
+
+    checkAuth();
   }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setUser(null);
+  };
 
   if (loading) {
     return (
@@ -88,11 +74,11 @@ export default function App() {
         <Routes>
           <Route 
             path="/login" 
-            element={user && !user.mustChangePassword ? <Navigate to="/" replace /> : <Login user={user} />} 
+            element={user ? <Navigate to="/" replace /> : <Login onLogin={setUser} />} 
           />
           <Route
             path="/"
-            element={user && !user.mustChangePassword ? <Layout user={user} setUser={setUser} /> : <Navigate to="/login" replace />}
+            element={user ? <Layout user={user} setUser={setUser} onLogout={handleLogout} /> : <Navigate to="/login" replace />}
           >
             <Route index element={<Dashboard user={user!} />} />
             <Route path="customers" element={<Customers user={user} />} />
@@ -103,6 +89,7 @@ export default function App() {
             <Route path="users" element={<Users user={user} />} />
             <Route path="settings" element={<Settings user={user} />} />
           </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </ErrorBoundary>

@@ -22,9 +22,10 @@ import { collection, getDocs } from 'firebase/firestore';
 interface LayoutProps {
   user: UserProfile;
   setUser: (user: UserProfile | null) => void;
+  onLogout: () => void;
 }
 
-export default function Layout({ user, setUser }: LayoutProps) {
+export default function Layout({ user, setUser, onLogout }: LayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [companies, setCompanies] = useState<Company[]>([]);
   const location = useLocation();
@@ -60,9 +61,8 @@ export default function Layout({ user, setUser }: LayoutProps) {
     }
   }, [user.role]);
 
-  const handleLogout = async () => {
-    await auth.signOut();
-    setUser(null);
+  const handleLogout = () => {
+    onLogout();
     navigate('/login');
   };
 

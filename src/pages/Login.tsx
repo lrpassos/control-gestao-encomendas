@@ -1,265 +1,126 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signInWithEmailAndPassword, updatePassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, getDoc, getDocs, collection, addDoc, query, where, limit, updateDoc } from 'firebase/firestore';
-import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { toast } from 'sonner';
-import { LogIn, User as UserIcon, Lock, ShieldCheck } from 'lucide-react';
-
-import { UserProfile } from '../types';
+import { LogIn, User as UserIcon, Lock } from 'lucide-react';
+import { signInWithCustomToken, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { auth } from '../firebase';
 
 interface LoginProps {
-  user: UserProfile | null;
+  onLogin: (user: any) => void;
 }
 
-export default function Login({ user: authUser }: LoginProps) {
+export default function Login({ onLogin }: LoginProps) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [identifier, setIdentifier] = useState(''); // Can be email or username
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  
-  // Password change state
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [initialized, setInitialized] = useState<boolean | null>(null);
 
-  const mustChange = authUser?.mustChangePassword;
+  useEffect(() => {
+    checkStatus();
+  }, []);
 
-  const handleCredentialLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
+  const checkStatus = async () => {
     try {
-      const lowerIdentifier = identifier.toLowerCase().trim();
-      let email = identifier;
-
-      // Handle root user bootstrap
-      if (lowerIdentifier === 'root') {
-        email = 'root@control.com';
-        try {
-          await signInWithEmailAndPassword(auth, email, password);
-        } catch (error: any) {
-          // Firebase sometimes returns auth/invalid-credential instead of user-not-found
-          // We only bootstrap if the password is 'root12345'
-          if ((error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') && password === 'root12345') {
-            // Bootstrap root user
-            try {
-              // Check if we can create the user
-              const userCredential = await createUserWithEmailAndPassword(auth, email, 'root12345');
-              const { user } = userCredential;
-              
-              // Check if a company already exists, otherwise create one
-              const companiesSnap = await getDocs(query(collection(db, 'companies'), limit(1)));
-              let companyId;
-              
-              if (companiesSnap.empty) {
-                const companyRef = await addDoc(collection(db, 'companies'), {
-                  name: 'Empresa Principal'
-                });
-                companyId = companyRef.id;
-              } else {
-                companyId = companiesSnap.docs[0].id;
-              }
-
-              // Check if root user already exists in Firestore
-              const rootQuery = query(collection(db, 'users'), where('username', '==', 'root'), limit(1));
-              const rootSnap = await getDocs(rootQuery);
-
-              if (rootSnap.empty) {
-                await setDoc(doc(db, 'users', user.uid), {
-                  username: 'root',
-                  email: email,
-                  role: 'admin',
-                  companyId: companyId,
-                  active: true,
-                  mustChangePassword: true
-                });
-              } else {
-                // Update existing root doc with new UID if needed
-                const existingRoot = rootSnap.docs[0];
-                await updateDoc(doc(db, 'users', existingRoot.id), {
-                  uid: user.uid, // Ensure UID is synced
-                  mustChangePassword: true
-                });
-              }
-              
-              // Re-sign in is not needed as createUserWithEmailAndPassword already signs in
-              // await signInWithEmailAndPassword(auth, email, 'root12345');
-            } catch (createError: any) {
-              if (createError.code === 'auth/email-already-in-use') {
-                // User exists in Auth but password 'root12345' is wrong
-                throw new Error('Usuário ou senha incorretos');
-              }
-              throw createError;
-            }
-          } else {
-            throw error;
-          }
-        }
-      } else if (!identifier.includes('@')) {
-        const usersPath = 'users';
-        try {
-          // Try exact match first
-          let q = query(collection(db, usersPath), where('username', '==', identifier), limit(1));
-          let snapshot = await getDocs(q);
-          
-          if (snapshot.empty) {
-            // Try lowercase match
-            q = query(collection(db, usersPath), where('username', '==', lowerIdentifier), limit(1));
-            snapshot = await getDocs(q);
-          }
-          
-          if (snapshot.empty) {
-            toast.error('Usuário não encontrado.');
-            setLoading(false);
-            return;
-          }
-          
-          email = snapshot.docs[0].data().email;
-        } catch (error) {
-          handleFirestoreError(error, OperationType.LIST, usersPath);
-          setLoading(false);
-          return;
-        }
-      }
-
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const { user } = userCredential;
-
-      // Check if user must change password
-      const userPath = `users/${user.uid}`;
-      let userDoc;
-      try {
-        userDoc = await getDoc(doc(db, 'users', user.uid));
-      } catch (error) {
-        handleFirestoreError(error, OperationType.GET, userPath);
-        return;
-      }
-      
-      const userData = userDoc.data();
-
-      if (userData?.active === false) {
-        await auth.signOut();
-        throw new Error('Sua conta está inativa. Entre em contato com o administrador.');
-      }
-
-      if (userData?.mustChangePassword) {
-        toast.info('Por favor, defina uma nova senha para continuar');
-      } else {
-        toast.success('Login realizado com sucesso');
-        navigate('/', { replace: true });
-      }
-    } catch (error: any) {
-      let message = 'Erro no login';
-      if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-        message = 'Usuário ou senha incorretos';
-      } else if (error.code === 'auth/user-not-found') {
-        message = 'Usuário não encontrado';
-      } else {
-        message = error.message;
-      }
-      
-      toast.error(message);
-    } finally {
-      setLoading(false);
+      const res = await fetch('/api/auth/status');
+      const data = await res.json();
+      setInitialized(data.initialized);
+    } catch (error) {
+      console.error('Error checking auth status:', error);
     }
   };
 
-  const handleChangePassword = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (newPassword !== confirmPassword) {
-      toast.error('As senhas não coincidem');
-      return;
-    }
-
-    if (newPassword.length < 4) {
-      toast.error('A senha deve ter pelo menos 4 caracteres');
-      return;
-    }
-
     setLoading(true);
-    try {
-      const user = auth.currentUser;
-      if (!user) throw new Error('Usuário não autenticado');
 
-      await updatePassword(user, newPassword);
-      
-      // Update Firestore flag
-      const userPath = `users/${user.uid}`;
-      try {
-        await updateDoc(doc(db, 'users', user.uid), {
-          mustChangePassword: false
+    try {
+      if (initialized === false) {
+        // Setup mode
+        const res = await fetch('/api/auth/setup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password }),
         });
-      } catch (error) {
-        handleFirestoreError(error, OperationType.UPDATE, userPath);
+        const data = await res.json();
+        
+        if (res.ok) {
+          toast.success('Senha de administrador definida com sucesso!');
+          setInitialized(true);
+          // Now login with the newly set password
+          await performLogin('root', password);
+        } else {
+          toast.error(data.error || 'Erro ao definir senha');
+        }
+      } else {
+        // Normal login mode
+        await performLogin(identifier, password);
       }
-
-      toast.success('Senha atualizada com sucesso!');
-      navigate('/', { replace: true });
     } catch (error: any) {
-      toast.error('Erro ao atualizar senha: ' + error.message);
+      toast.error('Erro na autenticação');
     } finally {
       setLoading(false);
     }
   };
 
-  if (mustChange) {
+  const performLogin = async (username: string, pass: string) => {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password: pass }),
+    });
+    const data = await res.json();
+
+    if (res.ok) {
+      // Sign in to Firebase with custom token for Firestore rules
+      if (data.firebaseToken) {
+        await signInWithCustomToken(auth, data.firebaseToken);
+      }
+      
+      localStorage.setItem('token', data.token);
+      toast.success('Login realizado com sucesso');
+      onLogin(data.user);
+      navigate('/', { replace: true });
+    } else {
+      toast.error(data.error || 'Usuário ou senha incorretos');
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const idToken = await result.user.getIdToken();
+
+      const res = await fetch('/api/auth/google-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      });
+      
+      const data = await res.json();
+
+      if (res.ok) {
+        localStorage.setItem('token', data.token);
+        toast.success('Login realizado com sucesso com Google');
+        onLogin(data.user);
+        navigate('/', { replace: true });
+      } else {
+        toast.error(data.error || 'Erro ao autenticar com Google');
+      }
+    } catch (error: any) {
+      console.error('Google Login Error:', error);
+      toast.error('Erro ao conectar com Google');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (initialized === null) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-black p-6">
-        <div className="w-full max-w-md space-y-8 rounded-2xl bg-[#111] p-8 shadow-2xl border border-gray-800">
-          <div className="text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-900/30 text-blue-400 mb-4">
-              <ShieldCheck size={24} />
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight text-white">Nova Senha</h1>
-            <p className="mt-2 text-sm text-gray-400">
-              Por segurança, defina uma nova senha para seu usuário.
-            </p>
-          </div>
-
-          <form onSubmit={handleChangePassword} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-400">Nova Senha</label>
-              <div className="relative mt-1">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-                <input
-                  type="password"
-                  required
-                  className="block w-full rounded-lg bg-gray-900 border border-gray-800 pl-10 pr-4 py-3 text-white focus:border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-600 transition-all"
-                  placeholder="••••••••"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-400">Confirmar Nova Senha</label>
-              <div className="relative mt-1">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-                <input
-                  type="password"
-                  required
-                  className="block w-full rounded-lg bg-gray-900 border border-gray-800 pl-10 pr-4 py-3 text-white focus:border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-600 transition-all"
-                  placeholder="••••••••"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex w-full items-center justify-center space-x-2 rounded-lg bg-white px-4 py-3 text-sm font-semibold text-black hover:bg-gray-200 transition-all disabled:opacity-50"
-            >
-              {loading ? (
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-black border-t-transparent"></div>
-              ) : (
-                <span>Definir Nova Senha</span>
-              )}
-            </button>
-          </form>
-        </div>
+      <div className="flex min-h-screen items-center justify-center bg-black">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-white border-t-transparent"></div>
       </div>
     );
   }
@@ -270,28 +131,34 @@ export default function Login({ user: authUser }: LoginProps) {
         <div className="text-center">
           <h1 className="text-3xl font-bold tracking-tight text-white">CONTROL</h1>
           <p className="mt-2 text-sm text-gray-400">
-            Acesse sua conta para gerenciar sua logística
+            {initialized === false 
+              ? 'Defina a senha de administrador para inicializar o sistema' 
+              : 'Acesse sua conta para gerenciar sua logística'}
           </p>
         </div>
 
         <div className="mt-8 space-y-6">
-          <form onSubmit={handleCredentialLogin} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-400">Usuário</label>
-              <div className="relative mt-1">
-                <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-                <input
-                  type="text"
-                  required
-                  className="block w-full rounded-lg bg-gray-900 border border-gray-800 pl-10 pr-4 py-3 text-white focus:border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-600 transition-all"
-                  placeholder="Seu usuário"
-                  value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                />
+          <form onSubmit={handleLogin} className="space-y-4">
+            {initialized !== false && (
+              <div>
+                <label className="block text-sm font-medium text-gray-400">Usuário</label>
+                <div className="relative mt-1">
+                  <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                  <input
+                    type="text"
+                    required
+                    className="block w-full rounded-lg bg-gray-900 border border-gray-800 pl-10 pr-4 py-3 text-white focus:border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-600 transition-all"
+                    placeholder="Seu usuário"
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
+                  />
+                </div>
               </div>
-            </div>
+            )}
             <div>
-              <label className="block text-sm font-medium text-gray-400">Senha</label>
+              <label className="block text-sm font-medium text-gray-400">
+                {initialized === false ? 'Nova Senha de Administrador' : 'Senha'}
+              </label>
               <div className="relative mt-1">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
                 <input
@@ -314,11 +181,33 @@ export default function Login({ user: authUser }: LoginProps) {
               ) : (
                 <>
                   <LogIn size={18} />
-                  <span>Entrar</span>
+                  <span>{initialized === false ? 'Definir Senha' : 'Entrar'}</span>
                 </>
               )}
             </button>
           </form>
+
+          {initialized !== false && (
+            <div className="space-y-4">
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-800"></div>
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-[#111] px-2 text-gray-500">Ou continue com</span>
+                </div>
+              </div>
+
+              <button
+                onClick={handleGoogleLogin}
+                disabled={loading}
+                className="flex w-full items-center justify-center space-x-2 rounded-lg bg-gray-900 border border-gray-800 px-4 py-3 text-sm font-semibold text-white hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-600 focus:ring-offset-2 focus:ring-offset-black transition-all disabled:opacity-50"
+              >
+                <img src="https://www.gstatic.com/firebase/anonymous-scan.png" alt="Google" className="h-5 w-5" referrerPolicy="no-referrer" />
+                <span>Entrar com Google</span>
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="text-center text-xs text-gray-500">
