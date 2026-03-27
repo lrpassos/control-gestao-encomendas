@@ -146,6 +146,10 @@ async function startServer() {
   app.get("/api/auth/status", async (req, res) => {
     try {
       console.log("Checking auth status...");
+      if (!db) {
+        return res.json({ initialized: true, warning: "Database not initialized" });
+      }
+      
       const rootSnap = await db.collection("users").where("username", "==", "root").limit(1).get();
       console.log("Auth status check complete. Empty:", rootSnap.empty);
       
@@ -156,12 +160,12 @@ async function startServer() {
       const rootData = rootSnap.docs[0].data();
       res.json({ initialized: !!rootData.passwordHash });
     } catch (error: any) {
-      console.error("Auth status error details:", error);
-      res.status(500).json({ 
-        error: "Internal server error", 
-        message: error.message, 
-        code: error.code,
-        stack: error.stack 
+      console.error("Auth status error (falling back to initialized: true):", error.message);
+      // Fallback to true so the login screen actually loads even if Firestore is blocked
+      res.json({ 
+        initialized: true, 
+        error: "Firestore permission denied",
+        message: error.message 
       });
     }
   });

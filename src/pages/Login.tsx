@@ -23,10 +23,12 @@ export default function Login({ onLogin }: LoginProps) {
   const checkStatus = async () => {
     try {
       const res = await fetch('/api/auth/status');
+      if (!res.ok) throw new Error('API Error');
       const data = await res.json();
-      setInitialized(data.initialized);
+      setInitialized(data.initialized !== false); // Default to true if not explicitly false
     } catch (error) {
       console.error('Error checking auth status:', error);
+      setInitialized(true); // Fallback to true to show login screen
     }
   };
 
