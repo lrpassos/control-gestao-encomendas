@@ -1,20 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { signInWithEmailAndPassword, updatePassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, getDoc, getDocs, collection, addDoc, query, where, limit, updateDoc } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { toast } from 'sonner';
 import { LogIn, User as UserIcon, Lock, ShieldCheck } from 'lucide-react';
 
-export default function Login() {
+import { UserProfile } from '../types';
+
+interface LoginProps {
+  user: UserProfile | null;
+}
+
+export default function Login({ user: authUser }: LoginProps) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [identifier, setIdentifier] = useState(''); // Can be email or username
   const [password, setPassword] = useState('');
   
   // Password change state
-  const [mustChange, setMustChange] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [currentUserData, setCurrentUserData] = useState<any>(null);
+
+  const mustChange = authUser?.mustChangePassword;
 
   const handleCredentialLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,8 +82,8 @@ export default function Login() {
                 });
               }
               
-              // Re-sign in to get the session right
-              await signInWithEmailAndPassword(auth, email, 'root12345');
+              // Re-sign in is not needed as createUserWithEmailAndPassword already signs in
+              // await signInWithEmailAndPassword(auth, email, 'root12345');
             } catch (createError: any) {
               if (createError.code === 'auth/email-already-in-use') {
                 // User exists in Auth but password 'root12345' is wrong
@@ -135,11 +143,10 @@ export default function Login() {
       }
 
       if (userData?.mustChangePassword) {
-        setMustChange(true);
-        setCurrentUserData({ uid: user.uid, ...userData });
         toast.info('Por favor, defina uma nova senha para continuar');
       } else {
         toast.success('Login realizado com sucesso');
+        navigate('/', { replace: true });
       }
     } catch (error: any) {
       let message = 'Erro no login';
@@ -188,7 +195,7 @@ export default function Login() {
       }
 
       toast.success('Senha atualizada com sucesso!');
-      setMustChange(false);
+      navigate('/', { replace: true });
     } catch (error: any) {
       toast.error('Erro ao atualizar senha: ' + error.message);
     } finally {
@@ -270,14 +277,14 @@ export default function Login() {
         <div className="mt-8 space-y-6">
           <form onSubmit={handleCredentialLogin} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-400">Usuário ou E-mail</label>
+              <label className="block text-sm font-medium text-gray-400">Usuário</label>
               <div className="relative mt-1">
                 <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
                 <input
                   type="text"
                   required
                   className="block w-full rounded-lg bg-gray-900 border border-gray-800 pl-10 pr-4 py-3 text-white focus:border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-600 transition-all"
-                  placeholder="Seu usuário ou e-mail"
+                  placeholder="Seu usuário"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                 />

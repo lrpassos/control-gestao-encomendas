@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from './firebase';
 import { toast } from 'sonner';
 import { UserProfile } from './types';
@@ -23,36 +23,54 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      try {
-        if (firebaseUser) {
-          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+    let unsubscribeDoc: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      console.log('Auth state changed:', firebaseUser?.uid);
+      
+      if (unsubscribeDoc) {
+        unsubscribeDoc();
+        unsubscribeDoc = null;
+      }
+
+      if (firebaseUser) {
+        const userRef = doc(db, 'users', firebaseUser.uid);
+        unsubscribeDoc = onSnapshot(userRef, (userDoc) => {
+          console.log('User doc snapshot received. Exists:', userDoc.exists());
           if (userDoc.exists()) {
             const userData = userDoc.data();
+            console.log('User data:', userData);
             if (userData.active === false) {
-              await auth.signOut();
+              auth.signOut();
               setUser(null);
               toast.error('Sua conta foi desativada.');
             } else {
               setUser({ uid: firebaseUser.uid, ...userData } as UserProfile);
             }
           } else {
-            // Profile is missing, but don't sign out yet. 
-            // The Login page will handle completing the profile.
+            console.log('User doc does not exist yet for UID:', firebaseUser.uid);
             setUser(null);
           }
-        } else {
+          setLoading(false);
+        }, (error) => {
+          console.error('Snapshot error for UID:', firebaseUser.uid, error);
+          // If it's a permission error, it might be because the doc doesn't exist yet
+          // and the rules are strict. We'll just set user to null and stop loading.
           setUser(null);
-        }
-      } catch (error) {
-        handleFirestoreError(error, OperationType.GET, 'users/' + firebaseUser?.uid);
+          setLoading(false);
+          // Don't show toast for every snapshot error to avoid spamming during bootstrap
+        });
+      } else {
+        console.log('No firebase user');
         setUser(null);
-      } finally {
         setLoading(false);
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeDoc) unsubscribeDoc();
+    };
   }, []);
 
   if (loading) {
@@ -68,12 +86,15 @@ export default function App() {
       <BrowserRouter>
         <Toaster position="top-right" theme="dark" />
         <Routes>
-          <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
+          <Route 
+            path="/login" 
+            element={user && !user.mustChangePassword ? <Navigate to="/" replace /> : <Login user={user} />} 
+          />
           <Route
             path="/"
-            element={user ? <Layout user={user} setUser={setUser} /> : <Navigate to="/login" />}
+            element={user && !user.mustChangePassword ? <Layout user={user} setUser={setUser} /> : <Navigate to="/login" replace />}
           >
-            <Route index element={<Dashboard user={user} />} />
+            <Route index element={<Dashboard user={user!} />} />
             <Route path="customers" element={<Customers user={user} />} />
             <Route path="withdrawal" element={<Withdrawal user={user} />} />
             <Route path="distributors" element={<Distributors user={user} />} />
