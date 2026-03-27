@@ -310,64 +310,70 @@ export default function Dashboard({ user }: DashboardProps) {
           </div>
         </div>
         
-        <div className="h-[200px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData}>
-              <defs>
-                <linearGradient id="colorEntradas" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
-                </linearGradient>
-                <linearGradient id="colorSaidas" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
-              <XAxis 
-                dataKey="name" 
-                stroke="#666" 
-                fontSize={12} 
-                tickLine={false} 
-                axisLine={false} 
-              />
-              <YAxis 
-                stroke="#666" 
-                fontSize={12} 
-                tickLine={false} 
-                axisLine={false} 
-                tickFormatter={(value) => `${value}`}
-              />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#111', 
-                  border: '1px solid #333',
-                  borderRadius: '8px',
-                  color: '#fff'
-                }}
-                itemStyle={{ fontSize: '12px' }}
-              />
-              <Legend verticalAlign="top" height={36}/>
-              <Area 
-                type="monotone" 
-                dataKey="entradas" 
-                stroke="#22c55e" 
-                strokeWidth={2}
-                fillOpacity={1} 
-                fill="url(#colorEntradas)" 
-                name="Entradas"
-              />
-              <Area 
-                type="monotone" 
-                dataKey="saidas" 
-                stroke="#3b82f6" 
-                strokeWidth={2}
-                fillOpacity={1} 
-                fill="url(#colorSaidas)" 
-                name="Saídas"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+        <div className="h-[300px] w-full min-h-[300px]">
+          {!loading && chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="colorEntradas" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorSaidas" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
+                <XAxis 
+                  dataKey="name" 
+                  stroke="#666" 
+                  fontSize={12} 
+                  tickLine={false} 
+                  axisLine={false} 
+                />
+                <YAxis 
+                  stroke="#666" 
+                  fontSize={12} 
+                  tickLine={false} 
+                  axisLine={false} 
+                  tickFormatter={(value) => `${value}`}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#111', 
+                    border: '1px solid #333',
+                    borderRadius: '8px',
+                    color: '#fff'
+                  }}
+                  itemStyle={{ fontSize: '12px' }}
+                />
+                <Legend verticalAlign="top" height={36}/>
+                <Area 
+                  type="monotone" 
+                  dataKey="entradas" 
+                  stroke="#22c55e" 
+                  strokeWidth={2}
+                  fillOpacity={1} 
+                  fill="url(#colorEntradas)" 
+                  name="Entradas"
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="saidas" 
+                  stroke="#3b82f6" 
+                  strokeWidth={2}
+                  fillOpacity={1} 
+                  fill="url(#colorSaidas)" 
+                  name="Saídas"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex h-full items-center justify-center text-gray-600">
+              {loading ? 'Carregando gráfico...' : 'Sem dados para exibir'}
+            </div>
+          )}
         </div>
       </div>
 

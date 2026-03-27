@@ -155,7 +155,8 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow get: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      allow list: if isActive() && isAdmin();
+      // Allow unauthenticated list with limit 1 to support login by username
+      allow list: if (isActive() && isAdmin()) || (!isAuthenticated() && request.query.limit == 1);
       allow create: if isAuthenticated() && (request.auth.uid == userId || isAdmin()) && isValidUser(request.resource.data);
       allow update: if isAuthenticated() && (request.auth.uid == userId || isAdmin()) && isValidUser(request.resource.data);
       allow delete: if isAdmin();
