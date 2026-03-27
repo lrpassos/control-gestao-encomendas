@@ -124,13 +124,53 @@ export default function Reports({ user }: ReportsProps) {
     return matchesCustomer && matchesDistributor && matchesDate && s.status === statusFilter;
   });
 
+  const exportToCSV = () => {
+    if (filteredShipments.length === 0) {
+      toast.error('Não há dados para exportar.');
+      return;
+    }
+
+    const headers = statusFilter === 'in-stock' 
+      ? ['Código de Rastreio', 'Cliente', 'Distribuidor', 'Quantidade', 'Data de Entrada', 'Dias em Estoque']
+      : ['Código de Rastreio', 'Cliente', 'Distribuidor', 'Quantidade', 'Data de Saída', 'Recebedor', 'CPF'];
+
+    const csvRows = filteredShipments.map(s => {
+      const customerName = customers.find(c => c.id === s.customerId)?.name || 'Desconhecido';
+      const distributorName = distributors.find(d => d.id === s.distributorId)?.name || 'Desconhecido';
+      const displayDate = format(new Date(statusFilter === 'in-stock' ? s.createdAt : (s.withdrawnAt || s.createdAt)), 'dd/MM/yyyy HH:mm');
+      
+      if (statusFilter === 'in-stock') {
+        const daysInStock = Math.floor((new Date().getTime() - new Date(s.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+        return [s.trackingCode, customerName, distributorName, s.quantity, displayDate, daysInStock];
+      } else {
+        return [s.trackingCode, customerName, distributorName, s.quantity, displayDate, s.receiverName || '-', s.receiverCpf || '-'];
+      }
+    });
+
+    const csvContent = [
+      headers.join(','),
+      ...csvRows.map(row => row.join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `relatorio_${statusFilter}_${format(new Date(), 'yyyy-MM-dd_HHmm')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Relatório exportado com sucesso!');
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
         <h2 className="text-2xl font-bold text-white">Relatórios de Entradas e Saídas</h2>
         <div className="flex items-center space-x-3">
           <button
-            onClick={() => toast.info('Funcionalidade de exportação em breve!')}
+            onClick={exportToCSV}
             className="flex items-center space-x-2 rounded-lg border border-gray-800 px-4 py-2 text-sm font-semibold text-gray-400 hover:bg-gray-900 hover:text-white transition-all"
           >
             <Download size={18} />

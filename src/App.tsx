@@ -9,6 +9,7 @@ import { Toaster } from 'sonner';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Customers from './pages/Customers';
+import Withdrawal from './pages/Withdrawal';
 import Distributors from './pages/Distributors';
 import Shipments from './pages/Shipments';
 import Reports from './pages/Reports';
@@ -74,6 +75,7 @@ export default function App() {
           >
             <Route index element={<Dashboard user={user} />} />
             <Route path="customers" element={<Customers user={user} />} />
+            <Route path="withdrawal" element={<Withdrawal user={user} />} />
             <Route path="distributors" element={<Distributors user={user} />} />
             <Route path="shipments" element={<Shipments user={user} />} />
             <Route path="reports" element={<Reports user={user} />} />

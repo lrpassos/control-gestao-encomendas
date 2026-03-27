@@ -383,137 +383,76 @@ export default function Dashboard({ user }: DashboardProps) {
         </div>
       </div>
 
-      {/* Shipments List */}
-      <div className="rounded-xl bg-[#111] border border-gray-800 overflow-hidden">
-        <div className="flex items-center justify-between border-b border-gray-800 p-4 bg-[#161616]">
-          <h3 className="font-semibold text-white">Remessas Atuais (Em Estoque)</h3>
-          {selectedShipments.length > 0 && (
-            <button
-              onClick={() => setIsWithdrawing(true)}
-              className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-gray-200 transition-all"
-            >
-              Retirar Selecionados ({selectedShipments.length})
-            </button>
-          )}
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-[#161616] text-gray-400 uppercase text-xs font-semibold">
-              <tr>
-                <th className="px-6 py-4">
-                  <input
-                    type="checkbox"
-                    className="rounded border-gray-800 bg-gray-900 text-white focus:ring-0"
-                    onChange={(e) => {
-                      if (e.target.checked) setSelectedShipments(filteredShipments.map(s => s.id));
-                      else setSelectedShipments([]);
-                    }}
-                    checked={selectedShipments.length === filteredShipments.length && filteredShipments.length > 0}
-                  />
-                </th>
-                <th className="px-6 py-4">Código de Rastreio</th>
-                <th className="px-6 py-4">Cliente</th>
-                <th className="px-6 py-4">Distribuidor</th>
-                <th className="px-6 py-4">Quantidade</th>
-                <th className="px-6 py-4">Data de Entrada</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-800">
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                    <div className="flex justify-center">
-                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-600 border-t-white"></div>
+      {/* Recent Activity */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="rounded-xl bg-[#111] border border-gray-800 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-bold text-white">Atividade Recente</h3>
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Últimas 5 Entradas</span>
+          </div>
+          <div className="space-y-4">
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-600 border-t-white"></div>
+              </div>
+            ) : shipments.length === 0 ? (
+              <p className="text-center text-sm text-gray-600 py-8">Nenhuma atividade recente encontrada.</p>
+            ) : (
+              shipments.slice(0, 5).map((shipment) => (
+                <div key={shipment.id} className="flex items-center justify-between rounded-lg bg-[#161616] p-4 border border-gray-800/50">
+                  <div className="flex items-center space-x-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-900/20 text-green-400">
+                      <Package size={20} />
                     </div>
-                  </td>
-                </tr>
-              ) : filteredShipments.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                    Nenhuma remessa encontrada em estoque.
-                  </td>
-                </tr>
-              ) : (
-                filteredShipments.map((shipment) => (
-                  <tr key={shipment.id} className="hover:bg-[#161616] transition-colors">
-                    <td className="px-6 py-4">
-                      <input
-                        type="checkbox"
-                        className="rounded border-gray-800 bg-gray-900 text-white focus:ring-0"
-                        checked={selectedShipments.includes(shipment.id)}
-                        onChange={() => toggleSelection(shipment.id)}
-                      />
-                    </td>
-                    <td className="px-6 py-4 font-mono text-gray-300">{shipment.trackingCode}</td>
-                    <td className="px-6 py-4 text-white font-medium">
-                      {customers[shipment.customerId]?.name || 'Desconhecido'}
-                    </td>
-                    <td className="px-6 py-4 text-gray-400">
-                      {distributors[shipment.distributorId]?.name || 'Desconhecido'}
-                    </td>
-                    <td className="px-6 py-4 text-gray-300">{shipment.quantity}</td>
-                    <td className="px-6 py-4 text-gray-500">
-                      {format(new Date(shipment.createdAt), 'dd/MM/yyyy HH:mm')}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Withdrawal Modal */}
-      {isWithdrawing && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-6 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl bg-[#111] p-8 shadow-2xl border border-gray-800">
-            <h3 className="text-xl font-bold text-white">Retirada de Remessa</h3>
-            <p className="mt-2 text-sm text-gray-400">
-              Forneça os detalhes do recebedor para as {selectedShipments.length} remessas selecionadas.
-            </p>
-
-            <form className="mt-6 space-y-4" onSubmit={handleWithdraw}>
-              <div>
-                <label className="block text-sm font-medium text-gray-400">Nome do Recebedor</label>
-                <input
-                  type="text"
-                  required
-                  className="mt-1 block w-full rounded-lg bg-gray-900 border border-gray-800 px-4 py-3 text-white focus:border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-600 transition-all"
-                  value={withdrawalData.receiverName}
-                  onChange={(e) => setWithdrawalData({ ...withdrawalData, receiverName: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-400">CPF do Recebedor</label>
-                <input
-                  type="text"
-                  required
-                  className="mt-1 block w-full rounded-lg bg-gray-900 border border-gray-800 px-4 py-3 text-white focus:border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-600 transition-all"
-                  value={withdrawalData.receiverCpf}
-                  onChange={(e) => setWithdrawalData({ ...withdrawalData, receiverCpf: e.target.value })}
-                />
-              </div>
-
-              <div className="mt-8 flex space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setIsWithdrawing(false)}
-                  className="flex-1 rounded-lg border border-gray-800 px-4 py-3 text-sm font-semibold text-gray-400 hover:bg-gray-900 hover:text-white transition-all"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 rounded-lg bg-white px-4 py-3 text-sm font-semibold text-black hover:bg-gray-200 transition-all"
-                >
-                  Confirmar Retirada
-                </button>
-              </div>
-            </form>
+                    <div>
+                      <p className="text-sm font-medium text-white">{shipment.trackingCode}</p>
+                      <p className="text-xs text-gray-500">
+                        {customers[shipment.customerId]?.name || 'Cliente Desconhecido'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-semibold text-gray-400">
+                      {format(new Date(shipment.createdAt), 'HH:mm')}
+                    </p>
+                    <p className="text-[10px] text-gray-600">
+                      {format(new Date(shipment.createdAt), 'dd/MM/yyyy')}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
-      )}
+
+        <div className="rounded-xl bg-[#111] border border-gray-800 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-bold text-white">Status do Sistema</h3>
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Tempo Real</span>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="rounded-lg bg-[#161616] p-4 border border-gray-800/50">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Conexão</p>
+              <div className="flex items-center space-x-2">
+                <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
+                <p className="text-sm font-medium text-white">Online</p>
+              </div>
+            </div>
+            <div className="rounded-lg bg-[#161616] p-4 border border-gray-800/50">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Banco de Dados</p>
+              <div className="flex items-center space-x-2">
+                <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+                <p className="text-sm font-medium text-white">Sincronizado</p>
+              </div>
+            </div>
+          </div>
+          <div className="mt-6 p-4 rounded-lg bg-blue-900/10 border border-blue-900/20">
+            <p className="text-xs text-blue-400 leading-relaxed">
+              O sistema está processando as remessas em tempo real. Todas as alterações são sincronizadas instantaneamente com o servidor.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

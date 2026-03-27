@@ -13,7 +13,8 @@ import {
   X,
   Settings,
   Building2,
-  ShieldCheck
+  ShieldCheck,
+  CheckCircle2
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { collection, getDocs } from 'firebase/firestore';
@@ -69,6 +70,7 @@ export default function Layout({ user, setUser }: LayoutProps) {
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { name: 'Remessas', path: '/shipments', icon: Package },
     { name: 'Clientes', path: '/customers', icon: Users },
+    { name: 'Retirada', path: '/withdrawal', icon: CheckCircle2 },
     { name: 'Distribuidores', path: '/distributors', icon: Truck },
     { name: 'Usuários', path: '/users', icon: ShieldCheck, adminOnly: true },
     { name: 'Relatórios', path: '/reports', icon: BarChart3 },
