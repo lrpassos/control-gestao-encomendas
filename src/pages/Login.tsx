@@ -21,34 +21,68 @@ export default function Login() {
     setLoading(true);
 
     try {
+      const lowerIdentifier = identifier.toLowerCase().trim();
       let email = identifier;
 
       // Handle root user bootstrap
-      if (identifier === 'root') {
+      if (lowerIdentifier === 'root') {
         email = 'root@control.com';
         try {
           await signInWithEmailAndPassword(auth, email, password);
         } catch (error: any) {
-          if (error.code === 'auth/user-not-found' && password === 'root') {
+          // Firebase sometimes returns auth/invalid-credential instead of user-not-found
+          // We only bootstrap if the password is 'root12345'
+          if ((error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') && password === 'root12345') {
             // Bootstrap root user
-            const userCredential = await createUserWithEmailAndPassword(auth, email, 'root');
-            const { user } = userCredential;
-            
-            const companyRef = await addDoc(collection(db, 'companies'), {
-              name: 'Empresa Principal'
-            });
+            try {
+              // Check if we can create the user
+              const userCredential = await createUserWithEmailAndPassword(auth, email, 'root12345');
+              const { user } = userCredential;
+              
+              // Check if a company already exists, otherwise create one
+              const companiesSnap = await getDocs(query(collection(db, 'companies'), limit(1)));
+              let companyId;
+              
+              if (companiesSnap.empty) {
+                const companyRef = await addDoc(collection(db, 'companies'), {
+                  name: 'Empresa Principal'
+                });
+                companyId = companyRef.id;
+              } else {
+                companyId = companiesSnap.docs[0].id;
+              }
 
-            await setDoc(doc(db, 'users', user.uid), {
-              username: 'root',
-              email: email,
-              role: 'admin',
-              companyId: companyRef.id,
-              active: true,
-              mustChangePassword: true
-            });
-            
-            // Re-sign in to get the session right
-            await signInWithEmailAndPassword(auth, email, 'root');
+              // Check if root user already exists in Firestore
+              const rootQuery = query(collection(db, 'users'), where('username', '==', 'root'), limit(1));
+              const rootSnap = await getDocs(rootQuery);
+
+              if (rootSnap.empty) {
+                await setDoc(doc(db, 'users', user.uid), {
+                  username: 'root',
+                  email: email,
+                  role: 'admin',
+                  companyId: companyId,
+                  active: true,
+                  mustChangePassword: true
+                });
+              } else {
+                // Update existing root doc with new UID if needed
+                const existingRoot = rootSnap.docs[0];
+                await updateDoc(doc(db, 'users', existingRoot.id), {
+                  uid: user.uid, // Ensure UID is synced
+                  mustChangePassword: true
+                });
+              }
+              
+              // Re-sign in to get the session right
+              await signInWithEmailAndPassword(auth, email, 'root12345');
+            } catch (createError: any) {
+              if (createError.code === 'auth/email-already-in-use') {
+                // User exists in Auth but password 'root12345' is wrong
+                throw new Error('Usuário ou senha incorretos');
+              }
+              throw createError;
+            }
           } else {
             throw error;
           }
@@ -56,8 +90,15 @@ export default function Login() {
       } else if (!identifier.includes('@')) {
         const usersPath = 'users';
         try {
-          const q = query(collection(db, usersPath), where('username', '==', identifier), limit(1));
-          const snapshot = await getDocs(q);
+          // Try exact match first
+          let q = query(collection(db, usersPath), where('username', '==', identifier), limit(1));
+          let snapshot = await getDocs(q);
+          
+          if (snapshot.empty) {
+            // Try lowercase match
+            q = query(collection(db, usersPath), where('username', '==', lowerIdentifier), limit(1));
+            snapshot = await getDocs(q);
+          }
           
           if (snapshot.empty) {
             toast.error('Usuário não encontrado.');
@@ -102,9 +143,13 @@ export default function Login() {
       }
     } catch (error: any) {
       let message = 'Erro no login';
-      if (error.code === 'auth/wrong-password') message = 'Senha incorreta';
-      else if (error.code === 'auth/user-not-found') message = 'Usuário não encontrado';
-      else message = error.message;
+      if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        message = 'Usuário ou senha incorretos';
+      } else if (error.code === 'auth/user-not-found') {
+        message = 'Usuário não encontrado';
+      } else {
+        message = error.message;
+      }
       
       toast.error(message);
     } finally {
